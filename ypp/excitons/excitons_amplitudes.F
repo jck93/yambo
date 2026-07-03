@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2015 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM DV
-!
-! This file is distributed under the terms of the GNU
-! General Public License. You can redistribute it and/or
-! modify it under the terms of the GNU General Public
-! License as published by the Free Software Foundation;
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will
-! be useful, but WITHOUT ANY WARRANTY; without even the
-! implied warranty of MERCHANTABILITY or FITNESS FOR A
-! PARTICULAR PURPOSE.  See the GNU General Public License
-! for more details.
-!
-! You should have received a copy of the GNU General Public
-! License along with this program; if not, write to the Free
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine excitons_amplitudes(Xk,Xen,q,BS_E_degs,iq)
  !
@@ -32,7 +16,8 @@ subroutine excitons_amplitudes(Xk,Xen,q,BS_E_degs,iq)
  use YPPm,           ONLY:EXCITON_weight_treshold,EXCITONS_user_indexes,EXCITONS_n_user_states,DIPs,&
 &                         DIPs_direction,l_dipoles,BSiq
  use BS_solvers,     ONLY:BS_mat,BSS_eh_table,BSS_desc,BSS_n_eig
- use DIPOLES,        ONLY:DIP_rotated,DIP_alloc,DIPOLES_reset
+ use DIPOLES,        ONLY:DIPOLES_reset
+ use ALLOC,          ONLY:DIPOLE_ALLOC_global
  use BS,             ONLY:BS_H_dim,BS_bands,BSqpts
  use com,            ONLY:msg
  use vec_operate,    ONLY:sort,v_norm
@@ -54,7 +39,7 @@ subroutine excitons_amplitudes(Xk,Xen,q,BS_E_degs,iq)
  integer, parameter   :: amp_steps=1000
  integer              :: amp_n_trans
  real(SP)             :: amp_range(2),amp_damping,amp_I(amp_steps),amp_trans(BS_H_dim,2)
- complex(SP)          :: amp_E(amp_steps) 
+ complex(SP)          :: amp_E(amp_steps),DIP(3)
  !
  call section('=','Amplitude and weights')
  !========================================
@@ -105,7 +90,8 @@ subroutine excitons_amplitudes(Xk,Xen,q,BS_E_degs,iq)
        if (.not.PAR_IND_DIPk_ibz%element_1D(ikibz)) cycle
        if (.not.PAR_IND_CON_BANDS_DIP%element_1D(ic)) cycle
        if (.not.PAR_IND_VAL_BANDS_DIP%element_1D(iv)) cycle
-       dip_factor=abs(dot_product(DIPs_direction,DIP_rotated(ic,iv,ikbz,i_spin,"DIP_iR",Xk)))**2.
+       call DIPOLE_rotate(ic,iv,ikbz,i_spin,"DIP_iR",Xk,DIP)
+       dip_factor=abs(dot_product(DIPs_direction,DIP))**2.
      endif
      !
      do i_l=BS_E_degs(i_l_grp),BS_E_degs(i_l_grp)+n_lambda_deg-1
@@ -222,9 +208,7 @@ subroutine excitons_amplitudes(Xk,Xen,q,BS_E_degs,iq)
  enddo
  !
  if (l_dipoles) then
-   call DIP_alloc('DIP_iR')
-   call DIP_alloc('DIP_P')
-   call DIP_alloc('DIP_v')
+   call DIPOLE_ALLOC_global( )
    call DIPOLES_reset(DIPs)
  endif
  !

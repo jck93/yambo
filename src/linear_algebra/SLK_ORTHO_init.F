@@ -1,14 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM, AF
+! Copyright (C) 2016 The Yambo Team
 !
-! Copyright (C) 2001-2007 Quantum-ESPRESSO group
-! This file is distributed under the terms of the
-! GNU General Public License. See the file `License'
-! in the root directory of the present distribution,
-! or http://www.gnu.org/copyleft/gpl.txt .
+! Authors (see AUTHORS file for details): AM AF
 !
 subroutine SLK_ORTHO_init( ORTHO, POOL, n_CPU_in )
  !
@@ -33,6 +28,7 @@ subroutine SLK_ORTHO_init( ORTHO, POOL, n_CPU_in )
  CALL BLACS_PINFO( ORTHO%BLACS_id, ORTHO%BLACS_np )
  CALL BLACS_GET( -1, 0, ORTHO%world_cntx )
  CALL BLACS_GRIDINIT( ORTHO%world_cntx, 'Row', 1, ORTHO%BLACS_np )
+ !CALL BLACS_GRIDINIT( ORTHO%world_cntx, 'C', 1, ORTHO%BLACS_np )
  !
  IF( n_CPU_in > 0 ) THEN
    ! use the input value ensuring that it falls in the proper range

@@ -1,32 +1,16 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2019 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
-!
-subroutine fix_ATOMPROJs(E,k,k_save,kpoints_map,old_nsym,old_dl_sop,old_sop_inv,S_contains_TR,action_kind)
+subroutine fix_ATOMPROJs(E,k,k_save,kpoints_map,old_nsym,old_dl_sop,old_sop_inv,S_contains_TR)
  !
- use pars,                ONLY:SP,lchlen,cZERO
+ use pars,                ONLY:LP,SP,lchlen,cZERO
  use com,                 ONLY:msg,core_io_path,more_io_path
  use IO_int,              ONLY:io_control
- use IO_m,                ONLY:OP_WR_CL,NONE,OP_APP_CL,OP_WR,OP_RD,VERIFY,&
+ use IO_m,                ONLY:NONE,OP_APP_CL,OP_RD,VERIFY,&
 &                              OP_APP,cp_file,OP_RD_CL,RD_CL,RD,DUMP
  use electrons,           ONLY:n_sp_pol
  use LIVE_t,              ONLY:live_timing
@@ -35,7 +19,7 @@ subroutine fix_ATOMPROJs(E,k,k_save,kpoints_map,old_nsym,old_dl_sop,old_sop_inv,
  use electrons,           ONLY:levels
  use atom_proj
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels),intent(in)  :: E
  !
@@ -46,9 +30,7 @@ subroutine fix_ATOMPROJs(E,k,k_save,kpoints_map,old_nsym,old_dl_sop,old_sop_inv,
  integer,intent(in)       :: old_nsym
  real(SP),intent(in)      :: old_dl_sop(3,3,old_nsym)
  integer,intent(in)       :: old_sop_inv(old_nsym)
- logical,intent(in)       :: S_contains_TR(old_nsym)
- !
- integer,intent(in)       :: action_kind
+ integer(LP),intent(in)   :: S_contains_TR(old_nsym)
  !
  ! Work space
  !
@@ -105,8 +87,6 @@ subroutine fix_ATOMPROJs(E,k,k_save,kpoints_map,old_nsym,old_dl_sop,old_sop_inv,
  YAMBO_ALLOC(atomic_projections,(n_atom_wfc,n_proj_bands,k%nibz,n_sp_pol))
  atomic_projections=cZERO
  !
- select case(action_kind)
- case(1)
    !
    call msg('s',' Copying existing database ...')
    !
@@ -153,30 +133,6 @@ subroutine fix_ATOMPROJs(E,k,k_save,kpoints_map,old_nsym,old_dl_sop,old_sop_inv,
    !
    if(n_steps>0) call live_timing()
    !
-   !
- case(2)
-   !
-   if(io_err==0) call msg('s',' Atomic projections reduction...')
-   !
-   call io_control(ACTION=OP_WR_CL,COM=NONE,SEC=(/1/),MODE=DUMP,ID=ID)
-   io_err=io_ATMPROJ_pwscf(ID) 
-   !
-   do i_sp_pol=1,n_sp_pol
-     do ik=1,k%nibz
-       !
-       ifrag=ik+(i_sp_pol-1)*k%nibz
-       !
-       atomic_projections(:,:,ik,i_sp_pol) =atom_proj_store(:,:,kpoints_map(1,ik),i_sp_pol)
-       !
-       call io_control(ACTION=OP_APP_CL,COM=NONE,SEC=(/ifrag+1/),ID=ID)      
-       io_err=io_ATMPROJ_pwscf(ID)
-       !
-     enddo
-   enddo
-   !
-   YAMBO_FREE(atom_proj_store)
-   !
- end select
  core_io_path=core_io_path_save
  !
 end subroutine fix_ATOMPROJs

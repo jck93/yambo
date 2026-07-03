@@ -1,51 +1,41 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2006 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
+! Authors (see AUTHORS file for details): AM AF NS GS
 !
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+#include<dev_defs.h>
 !
-subroutine rim(mode)
+subroutine rim(mode,Xw)
  !
  use pars,          ONLY:SP,pi,DP
  use com,           ONLY:msg
  use parallel_m,    ONLY:PP_indexes,myid,PP_indexes_reset
  use parallel_int,  ONLY:PP_redux_wait,PARALLEL_index 
  use LIVE_t,        ONLY:live_timing
- use vec_operate,   ONLY:v_norm2
+ use vec_operate,   ONLY:v_norm_square
  use D_lattice,     ONLY:alat
  use R_lattice,     ONLY:RL_vol,k_grid_uc_vol,k_grid_b,nqbz,&
 &                        nqibz,RIM_epsm1,RIM_is_diagonal,RIM_RL_vol,&
 &                        RIM_n_rand_pts,RIM_ng,RIM_W_ng,RIM_qpg,RIM_W_is_diagonal,&
-&                        RIM_id_epsm1_reference,RIM_anisotropy,RIM_W,&
-&                        cut_is_slab,idir
+&                        RIM_id_epsm1_reference,RIM_anisotropy,RIM_W,RIM_W_d,aux_RIM_W,& ! aux_RIM_W_d,&
+&                        cut_is_slab,idir,f_coeff,f_coeff_d
  use timing_m,      ONLY:timing
+ use frequency,     ONLY:w_samp
+ use gpu_m,         ONLY:have_gpu
+ use devxlib,       ONLY:devxlib_memcpy_h2d
  !
-#include<memory.h>
+#include<y_memory.h>
  !
- character(1)       :: mode
+ character(1)   :: mode
+ type(w_samp)   :: Xw
  !
  ! Work Space
  !
- type(PP_indexes)::px
- integer   :: iq
- real(SP)  :: em1_anis(3),G_radii,G_circ
+ type(PP_indexes) :: px
+ integer          :: iq
+ real(SP)         :: em1_anis(3),G_radii,G_circ
  !
  ! Random generator
  !
@@ -53,9 +43,10 @@ subroutine rim(mode)
  integer   :: N_out,N_in,N_out_G,rep_factor,inn1,inn2,inn3,ic
  real(SP)  :: v1(3),v2(3),v1_norm(2)
  real(SP), allocatable  :: qr(:,:)
+ real(SP), allocatable DEV_ATTR :: qr_d(:,:)
  integer            :: iseed(8)
  real(DP), external :: dlaran
- ! 
+ !
  if (mode == "x") call timing('RIM',OPR='start')
  if (mode == "c") call timing('RIM-W',OPR='start')
  !
@@ -67,6 +58,9 @@ subroutine rim(mode)
  ! the bare part is embodied in the exchange.
  !
  YAMBO_ALLOC(qr,(3,RIM_n_rand_pts))
+ if (have_gpu) then
+   YAMBO_ALLOC_GPU(DEV_VAR(qr),(3,RIM_n_rand_pts))
+ endif
  !
  em1_anis=RIM_epsm1(:)-1.
  !
@@ -117,7 +111,7 @@ subroutine rim(mode)
  enddo
  ! Precompute the neighbours distances
  do inn1=1,26
-  fn_dist(inn1)=v_norm2(first_neighbour(inn1,:))  
+  fn_dist(inn1)=v_norm_square(first_neighbour(inn1,:))  
  end do
  !
  ! Loop setup
@@ -138,13 +132,13 @@ subroutine rim(mode)
    ! From rlu in the k_grid_b units (v2) to Cartesian (v1)
    !
    v1=matmul(transpose(k_grid_b),v2) 
-   !v1_norm(1)=v_norm2(v1)
+   !v1_norm(1)=v_norm_square(v1)
    do inn1=1,26
      v1_norm(2)=(v1(1)* first_neighbour(inn1,1) &
                 +v1(2)* first_neighbour(inn1,2) &
                 +v1(3)* first_neighbour(inn1,3))*2._SP
      if (fn_dist(inn1)<v1_norm(2))  cycle loop
-     !v1_norm(2)=v_norm2(v1-first_neighbour(inn1,:))
+     !v1_norm(2)=v_norm_square(v1-first_neighbour(inn1,:))
      !if (v1_norm(2)<v1_norm(1)) cycle loop
      !if (v1_norm(2)<v1_norm(1)-1.E-5) cycle loop
      !
@@ -159,6 +153,10 @@ subroutine rim(mode)
  !
  !Only the 2D-BZ is sampled for 2D systems
  if (cut_is_slab) qr(idir(1),:) = 0._SP
+ !
+ ! init on GPU mem
+ !
+ if (have_gpu) call devxlib_memcpy_h2d(DEV_VAR(qr),qr)
  !
  call live_timing()
  call msg('r','Points outside the sBZ  ',N_out)
@@ -178,9 +176,18 @@ subroutine rim(mode)
    G_circ=0._SP
    N_out_G=0
  else if (mode == "c") then
-   YAMBO_ALLOC(RIM_W,(nqibz,RIM_W_ng,RIM_W_ng))
+   YAMBO_ALLOC(RIM_W,(Xw%n_freqs,nqibz,RIM_W_ng,RIM_W_ng))
    RIM_W=0._SP
- end if
+   !
+   ! AF: need to cp f_coeff on GPU mem before calling rim_integrate_w
+   !
+   YAMBO_ALLOC(aux_RIM_W,(Xw%n_freqs,RIM_W_ng,RIM_W_ng))
+#ifdef _GPU
+   !AMBO_ALLOC_GPU_SOURCE(DEV_VAR(aux_RIM_W),aux_RIM_W)
+   YAMBO_ALLOC_GPU_SOURCE(DEV_VAR(RIM_W),RIM_W)
+   YAMBO_ALLOC_GPU_SOURCE(DEV_VAR(f_coeff),f_coeff)
+#endif
+ endif
  !
  call PARALLEL_index(px,(/nqibz/))
  call live_timing('Momenta loop',px%n_of_elements(myid+1))
@@ -190,8 +197,10 @@ subroutine rim(mode)
    !
    if (mode == "x") then
      call rim_integrate_v(iq,qr,em1_anis,N_out,N_out_G,G_radii,G_circ)
-   else
-     call rim_integrate_w(iq,qr,N_out,em1_anis)
+   else if (mode == "c") then
+     !
+     call rim_integrate_w(iq,qr,qr_d,N_out,em1_anis,Xw)
+     !
    endif
    call live_timing(steps=1)
    !
@@ -224,7 +233,16 @@ subroutine rim(mode)
  ! CLEAN
  !
  call PP_indexes_reset(px)
+ !
+ if (mode == "c") then
+ YAMBO_FREE(aux_RIM_W)
+#ifdef _GPU
+ YAMBO_FREE_GPU(DEV_VAR(f_coeff))
+ YAMBO_FREE_GPU(DEV_VAR(qr))
+ !AMBO_FREE_GPU(DEV_VAR(aux_RIM_W))
+#endif
  YAMBO_FREE(qr)
+ end if
  !
  if (mode == "x") call timing('RIM',OPR='stop')
  if (mode == "c") call timing('RIM-W',OPR='stop')

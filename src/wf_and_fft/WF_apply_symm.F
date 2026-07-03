@@ -1,27 +1,11 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): DS, AF
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2013 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
+! Authors (see AUTHORS file for details): DS AF
 !
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
-!
-subroutine DEV_SUB_ALT(WF_apply_symm)(isc,WF_symm)
+subroutine DEV_SUB(WF_apply_symm)(isc,WF_symm)
  !
  ! INCLUDED in: WF_apply_symm_incl.F 
  !
@@ -32,7 +16,7 @@ subroutine DEV_SUB_ALT(WF_apply_symm)(isc,WF_symm)
  use parallel_m,    ONLY:myid
  use electrons,     ONLY:n_spinor
  use D_lattice,     ONLY:nsym,DEV_VAR(spin_sop),i_time_rev,idt_index
- use deviceXlib_m
+ use devxlib,       ONLY:devxlib_memcpy_d2d,devxlib_conjg_d
  !
  implicit none
  !
@@ -56,43 +40,58 @@ subroutine DEV_SUB_ALT(WF_apply_symm)(isc,WF_symm)
  !
  if(isc(3)==idt_index) then
    !
-   call dev_memcpy(WF_symm,DEV_VAR(WF%c)(:,:,i_wf))
+   ! dev2dev copy
+#ifdef _GPU_LOC   
+   call devxlib_memcpy_d2d(WF_symm,DEV_VAR(WF%c)(:,:,i_wf))
+#else
+   WF_symm=WF%c(:,:,i_wf)
+#endif
    return
    !
  endif
  !
  if(n_spinor==1) then
    !
-#ifdef _CUDA_LOC   
-   !$cuf kernel do(1) <<<*,*>>>
-#else
-   !$omp parallel do default(shared), private(ifft)
-#endif
+   !DEV_ACC_DEBUG data present(WF_p,WF_symm,fft_rot_r)
+   !DEV_ACC parallel loop
+   !DEV_CUF kernel do(1) <<<*,*>>>
+   !DEV_OMPGPU target map(present,alloc:WF_p,WF_symm,fft_rot_r)
+   !DEV_OMPGPU teams loop
+   !DEV_OMP parallel do default(shared), private(ifft)
    do ifft = 1, fft_size
      WF_symm(ifft,1)=WF_p(DEV_VAR(fft_rot_r)(ifft,isymm),1,i_wf)
    enddo
+   !DEV_OMPGPU end target
+   !DEV_ACC_DEBUG end data
    !
  endif
  !
  if (n_spinor==2) then
    !
-#ifdef _CUDA_LOC   
-   !$cuf kernel do(1) <<<*,*>>>
-#else
-   !$omp parallel do default(shared), private(ifft)
-#endif
+   !DEV_ACC_DEBUG data present(WF_p,WF_symm,fft_rot_r,spin_sop)
+   !DEV_ACC parallel loop
+   !DEV_CUF kernel do(1) <<<*,*>>>
+   !DEV_OMPGPU target map(present,alloc:WF_p,WF_symm,fft_rot_r,spin_sop)
+   !DEV_OMPGPU teams loop
+   !DEV_OMP parallel do default(shared), private(ifft)
    do ifft = 1, fft_size
      WF_symm(ifft,1)=DEV_VAR(spin_sop)(1,1,isymm)*WF_p(DEV_VAR(fft_rot_r)(ifft,isymm),1,i_wf)+ &
                      DEV_VAR(spin_sop)(1,2,isymm)*WF_p(DEV_VAR(fft_rot_r)(ifft,isymm),2,i_wf)
      WF_symm(ifft,2)=DEV_VAR(spin_sop)(2,1,isymm)*WF_p(DEV_VAR(fft_rot_r)(ifft,isymm),1,i_wf)+ &
                      DEV_VAR(spin_sop)(2,2,isymm)*WF_p(DEV_VAR(fft_rot_r)(ifft,isymm),2,i_wf)
    enddo
+   !DEV_OMPGPU end target
+   !DEV_ACC_DEBUG end data
    !
  endif
  !
  ! take care of time reversal if needed
  !
- if(isc(3)>nsym/(i_time_rev+1)) call dev_conjg(WF_symm)
+#ifdef _GPU_LOC
+ if(isc(3)>nsym/(i_time_rev+1)) call devxlib_conjg_d(WF_symm)
+#else
+ if(isc(3)>nsym/(i_time_rev+1)) WF_symm=conjg(WF_symm)
+#endif
  !
-end subroutine DEV_SUB_ALT(WF_apply_symm)
+end subroutine DEV_SUB(WF_apply_symm)
 

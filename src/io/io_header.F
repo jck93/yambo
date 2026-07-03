@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 integer function io_header(ID,QPTS,R_LATT,WF,IMPOSE_SN,TEMP,KPTS,D_LATT,XC_KIND,&
 &                          CUTOFF,GAUGE,IMPOSE_GAUGE,ACCEPT_SPIN,PARALLEL_STRUCTURE,FRAG,IMPOSE,NOWARN_SER)
@@ -42,7 +26,7 @@ integer function io_header(ID,QPTS,R_LATT,WF,IMPOSE_SN,TEMP,KPTS,D_LATT,XC_KIND,
 &                        io_serial_number,io_file,io_com,io_mode,&
 &                        DUMP,VERIFY,NONE,db_alat,io_code_revision
  use zeros,         ONLY:define_zeros
- use global_XC,     ONLY:G_E_xc_string,X_E_xc_string,K_E_xc_string,loaded_WF_xc_string,&
+ use global_XC,     ONLY:G_E_xc_string,X_E_xc_string,K_E_xc_string,&
 &                        G_WF_xc_string,X_WF_xc_string,K_WF_xc_string
  !
  implicit none
@@ -60,7 +44,7 @@ integer function io_header(ID,QPTS,R_LATT,WF,IMPOSE_SN,TEMP,KPTS,D_LATT,XC_KIND,
  real(SP)            :: local_zero(3),D_LATT_vec_disk(3),D_LATT_vec(3),&
 &                       save_Tel(2)
  logical             :: WARN,WARN_SERIAL,xc_kind_force,l_IMPOSE
- logical             :: QPTS_,R_LATT_,WF_,IMPOSE_SN_,T_EL_,KPTS_,CUTOFF_,GAUGE_,IMPOSE_GAUGE_,ACCEPT_SPIN_,FRAG_,D_LATT_
+ logical             :: QPTS_,R_LATT_,WF_,IMPOSE_SN_,KPTS_,CUTOFF_,GAUGE_,IMPOSE_GAUGE_,ACCEPT_SPIN_,D_LATT_
  character(schlen)   :: xc_string_kinds(10),PARALLEL_STRUCTURE_
  !
  io_header=0
@@ -434,7 +418,7 @@ integer function io_header(ID,QPTS,R_LATT,WF,IMPOSE_SN,TEMP,KPTS,D_LATT,XC_KIND,
          endif
        endif
      else
-       call io_elemental(ID,CH0=loaded_WF_xc_string,VAR=desc_,WARN=WARN,OP=(/"=="/))
+       call io_elemental(ID,CH0=string_,VAR=desc_,WARN=WARN,OP=(/"=="/))
      endif
      call io_elemental(ID,VAR="",VAR_SZ=0,MENU=0)
      !

@@ -1,3 +1,10 @@
+#
+# License-Identifier: GPL
+#
+# Copyright (C) 2021 The Yambo Team
+#
+# Authors (see AUTHORS file for details): AM
+#
  $(info )
  $(info * * *  Yambo Makefile * * *)
  $(info )
@@ -8,7 +15,7 @@
  $(info )
  $(info More help on how to use and tune the configure script options can be found on the wiki webpage:)
  $(info )
- $(info http://www.yambo-code.org/wiki/index.php?title=Installation)
+ $(info http://www.yambo-code.eu/wiki/index.php?title=Installation)
  $(info )
  $(info * * *  Yambo Libraries * * *)
  $(info )

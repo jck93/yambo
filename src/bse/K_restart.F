@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2020 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM DS AF
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine K_restart(iq,X,ID_head,ID,ID_compr,l_partial_kernel_loaded)
  !
@@ -27,9 +11,12 @@ subroutine K_restart(iq,X,ID_head,ID,ID_compr,l_partial_kernel_loaded)
  use LIVE_t,       ONLY:live_timing
  use com,          ONLY:msg
  use X_m,          ONLY:X_t
+ use stderr,       ONLY:real2ch
+ use units,        ONLY:Gigabyte
  use drivers,      ONLY:l_bs_fxc,l_bss
  use BS,           ONLY:l_BSE_restart,l_BSE_kernel_complete,&
-&                       BS_K_cutoff,BS_K_cutoff_done,n_BS_blks
+&                       BS_K_cutoff,BS_K_cutoff_done,n_BS_blks,BS_blk
+ use BS_solvers,   ONLY:BSS_kernel_IO_on_the_fly,BSS_kernel_last_stored_block,BSS_kernel_stored_size
  use IO_int,       ONLY:io_control
  use IO_m,         ONLY:OP_RD_CL,REP,VERIFY,NONE,OP_RD,manage_action,&
 &                       RD,WR,RD_CL,RD_CL_IF_END,WR_CL,OP_APP,DUMP
@@ -44,7 +31,7 @@ subroutine K_restart(iq,X,ID_head,ID,ID_compr,l_partial_kernel_loaded)
  ! Work space
  !
  integer           :: i_file,i_block,io_BS_err,IO_ACT,ID_now
- real(SP)          :: BS_K_cutoff_inp
+ real(SP)          :: BS_K_cutoff_inp,size_now,Sz
  character(schlen) :: timing_string,IO_mode
  !
  integer, external :: io_BS,io_BS_PAR_init,io_BS_header
@@ -96,6 +83,7 @@ subroutine K_restart(iq,X,ID_head,ID,ID_compr,l_partial_kernel_loaded)
  endif
  !
  if(l_BSE_kernel_complete.and.l_bss.and.io_BS_err==0) then
+   if (BSS_kernel_stored_size/=0._SP) then
    if(trim(IO_mode)=="full") then
      timing_string="Loading full BSE kernel"
      ID_now=ID
@@ -105,12 +93,27 @@ subroutine K_restart(iq,X,ID_head,ID,ID_compr,l_partial_kernel_loaded)
      ID_now=ID_compr
    endif
    if(n_BS_blks>0) call live_timing(trim(timing_string),n_BS_blks)
+   if(.not.BSS_kernel_IO_on_the_fly) BSS_kernel_last_stored_block=n_BS_blks
+   size_now=0
    do i_block=1,n_BS_blks
      call io_control(ACTION=RD,ID=ID_now)
      call io_BS_PAR_block(iq,i_block,ID_now,IO_MODE)
-     if(n_BS_blks>0) call live_timing(steps=1)
+     call live_timing(steps=1)
+     Sz=BS_blk(i_block)%size(1)*BS_blk(i_block)%size(2)
+     size_now=size_now+Sz*kind(size_now)*2/Gigabyte
+     if (BSS_kernel_IO_on_the_fly.and.size_now>=BSS_kernel_stored_size) then
+       BSS_kernel_last_stored_block=i_block
+       exit
+     endif
    enddo
    if(n_BS_blks>0) call live_timing()
+   if (i_block<n_BS_blks) call msg("s","BSE kernel stored in memory for "//trim(real2ch(size_now))//" GB")
+   if (i_block>n_BS_blks) BSS_kernel_last_stored_block=n_BS_blks
+   endif
+   if (BSS_kernel_last_stored_block==n_BS_blks) BSS_kernel_IO_on_the_fly=.false.
+   if (BSS_kernel_IO_on_the_fly.and.trim(IO_mode)=="full") then
+     call msg("s","BSE kernel will be loaded on the fly")
+   endif
    !
    ! Only BS_blk%done was loaded
    ! Now I need to estimate compressed size and load
@@ -151,7 +154,7 @@ subroutine K_restart(iq,X,ID_head,ID,ID_compr,l_partial_kernel_loaded)
  endif
  !
  call io_control(ACTION=IO_ACT,COM=REP,ID=ID_head)
- call io_control(ACTION=RD_CL,COM=REP,ID=ID)
+ if(.not.BSS_kernel_IO_on_the_fly) call io_control(ACTION=RD_CL,COM=REP,ID=ID)
  if(     l_BSE_kernel_complete) call io_BS_PAR_free(ID_head,ID,IO_mode,.true.)
  if(.not.l_BSE_kernel_complete) call io_BS_PAR_free(ID_head,ID,IO_mode,.false.)
  !
@@ -163,6 +166,7 @@ subroutine K_restart(iq,X,ID_head,ID,ID_compr,l_partial_kernel_loaded)
  ID_compr=0
  l_BSE_kernel_complete=.false.
  l_partial_kernel_loaded=.false.
+ l_BSE_kernel_complete=.false.
  !
  call io_control(ACTION=OP_RD_CL,COM=REP,MODE=VERIFY,SEC=(/1/),ID=ID)
  io_BS_err=io_BS(iq,X,ID)

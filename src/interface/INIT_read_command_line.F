@@ -1,42 +1,26 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2019 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM DS
-!
-! This file is distributed under the terms of the GNU
-! General Public License. You can redistribute it and/or
-! modify it under the terms of the GNU General Public
-! License as published by the Free Software Foundation;
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will
-! be useful, but WITHOUT ANY WARRANTY; without even the
-! implied warranty of MERCHANTABILITY or FITNESS FOR A
-! PARTICULAR PURPOSE.  See the GNU General Public License
-! for more details.
-!
-! You should have received a copy of the GNU General Public
-! License along with this program; if not, write to the Free
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine INIT_read_command_line(rstr,init_)
  !
  use pars,           ONLY:schlen
  use drivers,        ONLY:infile_editing,l_bse,l_alda_fxc,l_chi,l_elel_corr,l_nl_p_and_p,&
 &                         l_elel_scatt,l_elph_corr,l_elph_scatt,l_elphoton_corr,&
-&                         l_elphoton_scatt,l_em1s,l_em1d,l_ppa,l_phel_scatt,l_phel_corr,l_dipoles,l_X
+&                         l_elphoton_scatt,l_em1s,l_em1d,l_em1dx,l_ppa,l_mpa,l_phel_scatt,l_phel_corr,l_dipoles,l_X
  use BS,             ONLY:BSK_mode
  use BS_solvers,     ONLY:BSS_mode
  use X_m,            ONLY:Chi_mode
  use QP_m,           ONLY:QP_solver
- use memory,         ONLY:USER_MEM_limit_string,GET_user_MEM_limit
+ use y_memory,         ONLY:USER_MEM_limit_string,GET_user_MEM_limit
  use LIVE_t,         ONLY:USER_wall_time_string,GET_user_WALL_time
  use stderr,         ONLY:STRING_split,STRING_match,STRING_same
  use it_tools,       ONLY:runlevel_is_on,switch_off_runlevel
- use it_m,           ONLY:V_RL,V_kpt,V_sc,V_qp,V_io,V_general,V_resp,      &
-&                         V_real_time,V_nl_optics,V_all,V_parallel,V_ph,   &
+ use it_m,           ONLY:V_RL,V_kpt,V_sc,V_qp,V_coul,V_io,V_general,V_resp, &
+&                         V_real_time,V_nl_optics,V_all,V_parallel,V_ph,     &
 &                         infile_verbosity,nrnlvls,rnlvls
 #if defined _SC || defined _RT
  use hamiltonian,    ONLY:H_potential
@@ -138,6 +122,7 @@ subroutine INIT_read_command_line(rstr,init_)
      ! V_parallel=9
      ! V_nl_optics=10
      ! V_ph=11
+     ! V_coul=12
      ! V_all=99
      !
      if ( trim(rstr_piece(i1)) == 'infver' ) then
@@ -152,6 +137,7 @@ subroutine INIT_read_command_line(rstr,init_)
        if (STRING_same( trim(rstr_piece(i1+1)) , "nl")) infile_verbosity=V_nl_optics
        if (STRING_same( trim(rstr_piece(i1+1)) , "ph")) infile_verbosity=V_ph
        if (STRING_same( trim(rstr_piece(i1+1)) , "par")) infile_verbosity=V_parallel
+       if (STRING_same( trim(rstr_piece(i1+1)) , "coul")) infile_verbosity=V_coul
        if (STRING_same( trim(rstr_piece(i1+1)) , "all")) infile_verbosity=V_all
      endif
      !
@@ -160,14 +146,18 @@ subroutine INIT_read_command_line(rstr,init_)
      endif
      !
      if ( trim(rstr_piece(i1)) == 'screen') then
-       l_em1s= STRING_match(trim(rstr_piece(i1+1)),'s')
-       l_em1d= (STRING_match(trim(rstr_piece(i1+1)),'d') )
-       l_ppa = (STRING_match(trim(rstr_piece(i1+1)),'p') )
+       l_em1s= (STRING_same(trim(rstr_piece(i1+1)),'s') )
+       l_em1d= (STRING_same(trim(rstr_piece(i1+1)),'d') )
+       l_em1dx= (STRING_same(trim(rstr_piece(i1+1)),'x') )
+       l_ppa = (STRING_same(trim(rstr_piece(i1+1)),'p') )
+       l_mpa = (STRING_same(trim(rstr_piece(i1+1)),'m') )
        l_X   = (STRING_match(trim(rstr_piece(i1+1)),'X') )
-       if (l_X)   call initactivate(1,'Xx')
-       if (l_em1s) call initactivate(1,'em1s')
-       if (l_em1d) call initactivate(1,'em1d')
-       if (l_ppa)  call initactivate(1,'ppa')
+       if (l_X)     call initactivate(1,'Xx')
+       if (l_em1s)  call initactivate(1,'em1s')
+       if (l_em1d)  call initactivate(1,'em1d')
+       if (l_em1dx) call initactivate(1,'em1dx')
+       if (l_ppa)   call initactivate(1,'ppa')
+       if (l_mpa)   call initactivate(1,'mpa')
      endif
      !
      ! BSE/LLR
@@ -196,14 +186,14 @@ subroutine INIT_read_command_line(rstr,init_)
        Chi_mode='HARTREE'
        !
        if(l_bse)  then
-         if(STRING_same(trim(rstr_piece(i1+1))  , 'hartree'))  BSK_mode='HARTREE'
-         if(STRING_same(trim(rstr_piece(i1+1))  , 'hf'))       BSK_mode='HF'
+         if( STRING_same(trim(rstr_piece(i1+1)) , 'hartree'))  BSK_mode='HARTREE'
+         if( STRING_same(trim(rstr_piece(i1+1)) , 'hf'))       BSK_mode='HF'
          if( STRING_same(trim(rstr_piece(i1+1)) , 'alda'))     BSK_mode='ALDA'
-         if(STRING_same(trim(rstr_piece(i1+1))  , 'sex'))      BSK_mode='SEX'
+         if( STRING_same(trim(rstr_piece(i1+1)) , 'sex'))      BSK_mode='SEX'
          if( STRING_same(trim(rstr_piece(i1+1)) , 'bsfxc'))    BSK_mode='BSfxc'
          if( STRING_same(trim(rstr_piece(i1+1)) , 'ip'))       BSK_mode='IP'
-       else if(l_chi.or.l_em1s.or.l_em1d.or.l_ppa) then
-         if(STRING_same(trim(rstr_piece(i1+1))  , 'hartree'))  Chi_mode='HARTREE'
+       else if(l_chi.or.l_em1s.or.l_em1d.or.l_ppa.or.l_mpa.or.l_em1dx) then
+         if( STRING_same(trim(rstr_piece(i1+1)) , 'hartree'))  Chi_mode='HARTREE'
          if( STRING_same(trim(rstr_piece(i1+1)) , 'alda'))     Chi_mode='ALDA'
          if( STRING_same(trim(rstr_piece(i1+1)) , 'lrc'))      Chi_mode='LRC'
          if( STRING_same(trim(rstr_piece(i1+1)) , 'bsfxc'))    Chi_mode='BSfxc'
@@ -224,12 +214,13 @@ subroutine INIT_read_command_line(rstr,init_)
        BSS_mode=trim(rstr_piece(i1+1))
        if (.not.STRING_match(BSS_mode,'h').and..not.STRING_match(BSS_mode,'d').and.&
 &          .not.STRING_match(BSS_mode,'i').and..not.STRING_match(BSS_mode,'t').and.&
-&          .not.STRING_match(BSS_mode,'s')) BSS_mode='h'
+&          .not.STRING_match(BSS_mode,'s').and..not.STRING_match(BSS_mode,'x').and.&
+&          .not.STRING_match(BSS_mode,'c').and..not.STRING_match(BSS_mode,'o')) BSS_mode='h'
        !
        ! With and ALDA Fxc the t solver is not permitted
        !
        if (l_alda_fxc.and.STRING_match(BSS_mode,'t')) BSS_mode='h'
-       if (BSK_mode=='IP') call switch_off_runlevel('bss',on_name=' ')
+       if (BSK_mode=='IP') call switch_off_runlevel('bss',except=' ')
        if (BSK_mode==' ') then
          BSK_mode="SEX"
          Chi_mode="HARTREE"
@@ -282,6 +273,11 @@ subroutine INIT_read_command_line(rstr,init_)
          l_ppa=.TRUE.
          if (i_cycle==1) QP_solver="n"
          call initactivate(1,'ppa el_el_corr')
+       else if (trim(rstr_piece(i1+1))=='m') then
+         infile_editing=.true.
+         l_mpa=.TRUE.
+         QP_solver="n"
+         call initactivate(1,'mpa el_el_corr')
        else if (trim(rstr_piece(i1+1))=='c') then
          infile_editing=.true.
          if (i_cycle==1) QP_solver="n"
@@ -418,7 +414,7 @@ subroutine INIT_read_command_line(rstr,init_)
      !
      if ( trim(rstr_piece(i1)) == 'nloptics' ) then
        !
-       if ( trim(rstr_piece(i1+1)) == 'n'   ) n_ext_fields=1
+       if ( trim(rstr_piece(i1+1)) == 'n'   ) n_ext_fields=3
        if ( trim(rstr_piece(i1+1)) == 'p'   ) then
           n_ext_fields=3
           l_nl_p_and_p=.TRUE.

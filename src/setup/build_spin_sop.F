@@ -1,25 +1,11 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2012 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+#include<dev_defs.h>
 !
 subroutine build_spin_sop()
  !
@@ -27,12 +13,11 @@ subroutine build_spin_sop()
  use matrix_operate, ONLY:m3det
  use D_lattice,      ONLY:dl_sop,spin_sop,nsym,i_time_rev,&
 &                         sigma_0,sigma_x,sigma_y,sigma_z
-#if defined _CUDA
- use D_lattice,      ONLY:spin_sop_d
-#endif
+ use D_lattice,      ONLY:DEV_VAR(spin_sop)
  use electrons,      ONLY:n_spinor
+ use gpu_m,          ONLY:have_gpu
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  complex(SP)    ::t_rev(2,2)
  complex(SP)    ::spin_RX_delta(2,2),spin_RY_beta(2,2),spin_RZ_alpha(2,2)
@@ -66,15 +51,15 @@ subroutine build_spin_sop()
    !
    !           "Tait-Bryan angles"
    if (abs(tmp_sop(3,1)+1._SP)<1.E-5_SP) then
+     beta= pi/2._SP
      alpha=0._SP
-     beta=-pi/2._SP
      delta=atan2(tmp_sop(1,2),tmp_sop(1,3))
    elseif (abs(tmp_sop(3,1)-1._SP)<1.E-5_SP) then
+     beta=-pi/2._SP
      alpha=0._SP
-     beta= pi/2._SP
      delta=atan2(-tmp_sop(1,2),-tmp_sop(1,3))
    else
-     beta= asin(tmp_sop(3,1))
+     beta=-asin(tmp_sop(3,1))
      alpha=atan2(tmp_sop(2,1)/cos(beta),tmp_sop(1,1)/cos(beta))
      delta=atan2(tmp_sop(3,2)/cos(beta),tmp_sop(3,3)/cos(beta))
    endif
@@ -104,9 +89,9 @@ subroutine build_spin_sop()
    !
  enddo
  !
-#if defined _CUDA
- if (allocated(spin_sop_d)) deallocate(spin_sop_d)
- allocate(spin_sop_d,source=spin_sop)
+#ifdef _GPU
+ YAMBO_FREE_GPU(DEV_VAR(spin_sop))
+ YAMBO_ALLOC_GPU_SOURCE(DEV_VAR(spin_sop),spin_sop)
 #endif
  !
  ! DEBUG <

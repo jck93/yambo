@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2016 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine PARALLEL_collisions( k, COLL )
  !
@@ -146,11 +130,11 @@ subroutine PARALLEL_collisions( k, COLL )
  use parallel_int,  ONLY:PARALLEL_live_message,PARALLEL_check_phase_space
  use collision_ext, ONLY:COLLISIONS_group,COLL_bands
  use parallel_m,    ONLY:PAR_IND_Xk_ibz,PAR_IND_B_mat,PAR_IND_G_k,PAR_IND_Q_bz,PAR_IND_QP,&
-&                        l_par_RT,l_par_SE,l_par_SC,l_par_NL
+&                        l_par_RT,l_par_SE,l_par_SX,l_par_SC,l_par_NL
  use hamiltonian,   ONLY:B_mat_index
  use R_lattice,     ONLY:bz_samp,qindx_S,nqbz
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(bz_samp)          :: k
  type(COLLISIONS_group) :: COLL
@@ -190,7 +174,7 @@ subroutine PARALLEL_collisions( k, COLL )
    endif
    !
    ! l_par_SE is for LAMB
-   if (l_par_SE.or.l_par_SC) then
+   if (l_par_SE.or.l_par_SC.or.l_par_SX) then
      if (.not.PAR_IND_QP%element_1D(i_coll)) cycle
    endif
    !
@@ -200,7 +184,7 @@ subroutine PARALLEL_collisions( k, COLL )
    !
    if (l_eval_collisions) then
      !
-     if ( (.not.l_par_SE) ) then
+     if ( (.not.l_par_SE).or.(.not.l_par_SX) ) then
        !
        do i_q=1,nqbz
          !
@@ -230,7 +214,7 @@ subroutine PARALLEL_collisions_reset(COLL)
  !
  use collision_ext, ONLY:COLLISIONS_group
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(COLLISIONS_group), intent(inout) :: COLL
  !

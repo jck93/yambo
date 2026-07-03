@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2016 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): DS AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine DIPOLE_IO(Xk,Xen,Dip,check_read_or_write,io_err,PAR_K_scheme_kind)
  !
@@ -30,7 +14,7 @@ subroutine DIPOLE_IO(Xk,Xen,Dip,check_read_or_write,io_err,PAR_K_scheme_kind)
  use IO_m,        ONLY:io_DIP
  use R_lattice,   ONLY:bz_samp
  use electrons,   ONLY:levels,n_sp_pol
- use DIPOLES,     ONLY:DIPOLE_t,DIP_v,use_covariant_approach
+ use DIPOLES,     ONLY:DIPOLE_t,covariant_obs
  use IO_int,      ONLY:io_control
  use IO_m,        ONLY:manage_action,VERIFY,DUMP,REP,OP_WR_CL,OP_WR,OP_RD_CL,&
 &                      OP_IF_START_APP_CL_IF_END,OP_IF_START_RD_CL_IF_END
@@ -82,8 +66,8 @@ subroutine DIPOLE_IO(Xk,Xen,Dip,check_read_or_write,io_err,PAR_K_scheme_kind)
  write_header  =  (master_cpu.and.writing)
  read_header   =  .not.write_header 
  !
- write_header_ovlp  =write_header.and.use_covariant_approach
- read_header_ovlp   = read_header.and.use_covariant_approach
+ write_header_ovlp  =write_header.and.len_trim(covariant_obs)>0
+ read_header_ovlp   = read_header.and.len_trim(covariant_obs)>0
  !
  if(write_header) then
    call io_control(ACTION=OP_WR_CL,COM=REP,SEC=(/1/),MODE=VERIFY,ID=ID)
@@ -94,6 +78,7 @@ subroutine DIPOLE_IO(Xk,Xen,Dip,check_read_or_write,io_err,PAR_K_scheme_kind)
    call io_control(ACTION=OP_WR_CL,COM=REP,SEC=(/1/),MODE=VERIFY,ID=ID_S)
    io_err=io_err+io_Overlaps(Dip,ID_S)
  endif
+
  !
  ! To fix problems with asynchronous I/O 
  !
@@ -188,7 +173,7 @@ subroutine DIPOLE_IO(Xk,Xen,Dip,check_read_or_write,io_err,PAR_K_scheme_kind)
  ! OVERLAPS I/O
  !==============
  !
- if(use_covariant_approach) then
+ if(len_trim(covariant_obs)>0) then
    !
 #if !defined _PAR_IO
    ! IO parallel indexes needed below by manage_action
@@ -337,7 +322,6 @@ subroutine DIPOLE_IO(Xk,Xen,Dip,check_read_or_write,io_err,PAR_K_scheme_kind)
          enddo
        enddo
      enddo
-     !
    end subroutine project_spin_dipoles
    !
    subroutine project_dipoles(Dip)
@@ -365,7 +349,6 @@ subroutine DIPOLE_IO(Xk,Xen,Dip,check_read_or_write,io_err,PAR_K_scheme_kind)
          enddo
        enddo
      enddo
-     !
    end subroutine project_dipoles
 #endif
    !

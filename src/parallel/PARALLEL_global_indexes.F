@@ -1,34 +1,15 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM, DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2013 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AM DS
 !
 subroutine PARALLEL_global_indexes(E,Xk,q,ENVIRONMENT,X,Dip,RESET,Dip_limits_pre_defined)
  !
  ! LOGICALS
- use parallel_m,    ONLY:l_par_X_T,l_par_RT,l_par_SE,l_par_X_G,l_par_X_G_finite_q,&
-&                        l_par_DIP,l_par_BZINDX,l_par_NL
-#if defined _QED
- use parallel_m,    ONLY:l_par_SC
-#endif
+ use parallel_m,    ONLY:l_par_X_T,l_par_RT,l_par_SE,l_par_SX,l_par_X_G,l_par_X_G_finite_q,&
+&                        l_par_DIP,l_par_BZINDX,l_par_NL,l_par_SC,l_par_OSCLL
  ! COMMUNICATORS
  use parallel_m,    ONLY:PAR_COM_CON_INDEX_X,PAR_COM_VAL_INDEX_X
  ! IND
@@ -42,14 +23,11 @@ subroutine PARALLEL_global_indexes(E,Xk,q,ENVIRONMENT,X,Dip,RESET,Dip_limits_pre
  use parallel_int,  ONLY:PARALLEL_index,PARALLEL_live_message
  use DIPOLES,       ONLY:DIPOLE_t
  use X_m,           ONLY:X_t,l_X_terminator
-#if defined _QED
- use parallel_m,    ONLY:l_par_SC
-#endif
  use electrons,     ONLY:levels
  use R_lattice,     ONLY:bz_samp
  use pars,          ONLY:SP
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels)               ::E
  type(bz_samp)              ::Xk,q
@@ -100,11 +78,11 @@ subroutine PARALLEL_global_indexes(E,Xk,q,ENVIRONMENT,X,Dip,RESET,Dip_limits_pre
  l_par_X_G_finite_q =ENVIRONMENT=="Response_G_space_and_IO"
  l_par_X_G          =ENVIRONMENT=="Response_G_space"
  l_par_SE           =ENVIRONMENT=="Self_Energy"
+ l_par_SX           =ENVIRONMENT=="Sigma_X"
  l_par_RT           =ENVIRONMENT=="Real_Time"
  l_par_NL           =ENVIRONMENT=="Non_Linear"
-#if defined _QED
- l_par_SC           =ENVIRONMENT=="Self_Energy"
-#endif
+ l_par_SC           =ENVIRONMENT=="Self_Energy".or.ENVIRONMENT=="Sigma_X"
+ l_par_OSCLL        =ENVIRONMENT=="Oscillators"
  !
  !==================================
  ! USER provided PARALLEL structure
@@ -163,7 +141,8 @@ subroutine PARALLEL_global_indexes(E,Xk,q,ENVIRONMENT,X,Dip,RESET,Dip_limits_pre
  !
  if (      ENVIRONMENT=="DIPOLES")             call PARALLEL_global_DIPOLES(E,Xk,q,ENVIRONMENT)
  !
- if (      ENVIRONMENT=="Self_Energy")         call PARALLEL_global_Self_Energy(E,Xk,q)
+ if (      ENVIRONMENT=="Self_Energy")         call PARALLEL_global_Self_Energy(E,Xk,q,ENVIRONMENT)
+ if (      ENVIRONMENT=="Sigma_X")             call PARALLEL_global_Self_Energy(E,Xk,q,ENVIRONMENT)
  !
  if (      ENVIRONMENT=="Response_T_space")    call PARALLEL_global_Response_T_base(Xk)
  !
@@ -172,14 +151,12 @@ subroutine PARALLEL_global_indexes(E,Xk,q,ENVIRONMENT,X,Dip,RESET,Dip_limits_pre
 #endif
  !
 #if defined _NL
- if (      ENVIRONMENT=="Non_Linear")          call PARALLEL_global_Non_Linear(E,Xk,q,ENVIRONMENT)
+ if (      ENVIRONMENT=="Non_Linear")          call PARALLEL_global_Non_Linear(E,Xk,q)
+ if (      ENVIRONMENT=="Oscillators")         call PARALLEL_global_Oscillators(E,Xk,q)
 #endif
  !
 #if defined _SCALAPACK
  if (      ENVIRONMENT=="ScaLapacK")           call PARALLEL_global_ScaLapack( )
-#endif
-#if defined _ELPH
- if (      ENVIRONMENT=="Phonon_Self_Energy")  call PARALLEL_global_Phonon_Self_Energy( )
 #endif
  !
  !==============================================================================

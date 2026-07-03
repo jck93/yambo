@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2016 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine k_grids(en,k,Xk,q)
  !
@@ -39,7 +23,7 @@ subroutine k_grids(en,k,Xk,q)
  use zeros,               ONLY:k_iku_zero
  use YPP_interfaces,      ONLY:k_special
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels) ::en       
  type(bz_samp)::k,Xk,q
@@ -211,9 +195,15 @@ subroutine k_grids(en,k,Xk,q)
  !
  if (l_shifted_grid) then
    !
+   call section('=',"== Built-in IBZ K-grid ["//trim(coo_out)//"] ==")
+   YAMBO_ALLOC(BZ_weights,(Xk%nibz))
+   BZ_weights(:)=Xk%weights(:)*real(Xk%nbz,SP)
+   call k_grid_printer(Xk%nibz,Xk%pt,'iku',"PW",wk=BZ_weights)
+   YAMBO_FREE(BZ_weights)
+   !
    ! Generate shifted k-points set for dipole calculation
    !
-  call section('=',"== Shifted grids generator ==")
+   call section('=',"== Shifted grids generator ==")
    !================================================
    !
    if(any(abs(U_q_shifts)/=0._SP)) then
@@ -238,7 +228,7 @@ subroutine k_grids(en,k,Xk,q)
        !
        i2 = i2 + 1
        !
-       ! Convert U_q_shifts[iku] to coo_in
+       ! Convert U_q_shifts[iku] to coo_out
        !
        call K_transform(q0,trim(coo_in))
        !
@@ -257,7 +247,7 @@ subroutine k_grids(en,k,Xk,q)
          !
        enddo
        !
-       call k_grid_printer(Xk%nibz,k_plus_q,trim(coo_out),"none")
+       call k_grid_printer(Xk%nibz,k_plus_q,trim(coo_out),"PW")
        !
      enddo
       !
@@ -275,7 +265,7 @@ subroutine k_grids(en,k,Xk,q)
  !
  if(l_regular_grid) then
    if(product(INTERP_grid)<=0) call error("Nk_x Nk_y Nk_z must be positive ")
-   call INTERPOLATION_create_the_grid(USER_k,'i',INTERP_grid)
+   call INTERPOLATION_grid(USER_k,'i',INTERP_grid)
    call k_ibz2bz(USER_k,'a',.false.)
    USER_k%ptbz(:,:)=USER_k%ptbz(:,:)-nint(USER_k%ptbz(:,:)) ! Bring in the BZ
    USER_k%pt(:,:)  =USER_k%pt(:,:)  -nint(USER_k%pt(:,:)) ! Bring in the BZ

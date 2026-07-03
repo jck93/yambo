@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): MG, CA
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2016 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): MG CA
 !
 subroutine k_map_nearest_by_dir(Xk,k_map)
  !
@@ -30,7 +14,7 @@ subroutine k_map_nearest_by_dir(Xk,k_map)
  use com,            ONLY:msg
  use pars,           ONLY:zero_dfl
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(bz_map), intent(inout) :: k_map
  type(bz_samp),intent(inout) :: Xk
@@ -171,7 +155,7 @@ subroutine k_find_smallest_g0(g0_idx,g0_length)
  !
  ! Find the smallest G0 in each direction
  !
- use pars,           ONLY:SP,schlen
+ use pars,           ONLY:SP
  use vec_operate,    ONLY:c2a
  use R_lattice,      ONLY:g_vec,ng_closed
  use com,            ONLY:msg                                                                                   
@@ -186,7 +170,6 @@ subroutine k_find_smallest_g0(g0_idx,g0_length)
  ! Work Space
  !
  integer :: id,i1
- character(schlen)  :: dump_ch
  real(SP)           :: g0(3)
  !
  do id=1,3
@@ -219,14 +202,21 @@ subroutine k_find_smallest_g0(g0_idx,g0_length)
    !
  enddo
  !
- write(dump_ch,'(a,3i3)') " Index g0 smallest positive vectors in each direction: ",g0_idx(:,1)
- call msg("s",dump_ch)
- write(dump_ch,'(a,3i3)') " Index g0 smallest negative vectors in each direction: ",g0_idx(:,2)
- call msg("s",dump_ch)
+ call msg("r"," Smallest g0 vector in each direction: positive",g0_idx(:,1))
+ call msg("r","                                       negative",g0_idx(:,2))
  !
 end subroutine k_find_smallest_g0
 
 subroutine check_shifts(Xk,WF_shifts)
+ !
+ ! I want all k-points between 0 and 1 (same notation of QE with Berry)
+ ! therefore I check if they are outside of this range:
+ !
+ ! *) If a k-point is negative I assign a positive shift WF_shifts=1
+ !    to the WF to bring it in the correct BZ
+ ! *) If a k-point is larger than 1 I assign a negative shift WF_shifts=-1
+ !    to bring in the BZ
+ ! *) If a k-point is already between 0-1 I do not need to shift it
  !
  use pars,                ONLY:SP
  use R_lattice,           ONLY:bz_samp
@@ -248,7 +238,7 @@ subroutine check_shifts(Xk,WF_shifts)
      if(Xk%ptbz(ik,id)<-EPS) then
         WF_shifts(ik,id)=1
      elseif(Xk%ptbz(ik,id)>1._SP-EPS) then
-        WF_shifts(ik,id)=2
+        WF_shifts(ik,id)=-1
      endif
    enddo
  enddo

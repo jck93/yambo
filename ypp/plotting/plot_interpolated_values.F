@@ -1,25 +1,9 @@
 ! 
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): CA, DS, AM
+! Copyright (C) 2019 The Yambo Team
 !
-! This file is distributed under the terms of the GNU
-! General Public License. You can redistribute it and/or
-! modify it under the terms of the GNU General Public
-! License as published by the Free Software Foundation;
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will
-! be useful, but WITHOUT ANY WARRANTY; without even the
-! implied warranty of MERCHANTABILITY or FITNESS FOR A
-! PARTICULAR PURPOSE.  See the GNU General Public License
-! for more details.
-!
-! You should have received a copy of the GNU General Public
-! License along with this program; if not, write to the Free
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): CA DS AM
 !
 subroutine plot_interpolated_values(Xk,Xen,Ef,LOCAL_k,IDs,dims,nquantities,nfiles,basename,int_kind,i_T)
  !
@@ -27,7 +11,7 @@ subroutine plot_interpolated_values(Xk,Xen,Ef,LOCAL_k,IDs,dims,nquantities,nfile
  use pars,           ONLY:SP,schlen
  use com,            ONLY:msg,of_open_close
  use electrons,      ONLY:levels,n_sp_pol,n_spinor
- use vec_operate,    ONLY:v_norm,iku_v_norm
+ use vec_operate,    ONLY:iku_v_norm
  use R_lattice,      ONLY:bz_samp
  use stderr,         ONLY:intc
  use YPPm,           ONLY:coo_out,K_transform,CIRCUIT_E_db,CIRCUIT_k_label
@@ -39,7 +23,7 @@ subroutine plot_interpolated_values(Xk,Xen,Ef,LOCAL_k,IDs,dims,nquantities,nfile
  use YPP_real_time,  ONLY:GreenF_T_and_W
 #endif
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(bz_samp),    intent(in)  :: Xk,LOCAL_k
  type(levels),     intent(in)  :: Xen
@@ -63,7 +47,6 @@ subroutine plot_interpolated_values(Xk,Xen,Ef,LOCAL_k,IDs,dims,nquantities,nfile
  ! Allocs
  !
  integer,  allocatable :: Grid_to_path_map(:,:)
- real(SP), allocatable :: circuit_versor(:,:),circuit_dist(:,:)
  real(SP), allocatable :: auxiliary_var(:,:,:,:),tmp_k(:,:),tmp_k_dist(:,:)
  !
  PLOT_interpolated = index(trim(basename),"interpolated")>0
@@ -83,44 +66,10 @@ subroutine plot_interpolated_values(Xk,Xen,Ef,LOCAL_k,IDs,dims,nquantities,nfile
  proj_wfc=(trim(SC_neq_kind)=="matsubara")
 #endif
  !
- ! Define a map between k-points in grid and nearest k-point in circuit
- !
  if (PLOT_built_in) then
    !
-   YAMBO_ALLOC(circuit_versor,(3,LOCAL_k%nbz))
-   YAMBO_ALLOC(circuit_dist  ,(3,LOCAL_k%nbz))
-   !
    YAMBO_ALLOC(Grid_to_path_map,(LOCAL_k%nbz,Xk%nbz))
-   Grid_to_path_map =-1
-   !
-   do ik_local=1,LOCAL_k%nbz-1
-     tmp_dist=LOCAL_k%pt(ik_local+1,:)-LOCAL_k%pt(ik_local,:)
-     circuit_dist  (:,ik_local)=tmp_dist
-     circuit_versor(:,ik_local)=tmp_dist/v_norm(tmp_dist)
-   enddo
-   circuit_versor(:,ik_local)=circuit_versor(:,ik_local-1)
-   !
-   n_points_max=0
-   do ik_local=1,LOCAL_k%nbz
-     !
-     n_points=0
-     do ik_bz_grid=1,Xk%nbz
-       !
-       tmp_dist=Xk%ptbz(ik_bz_grid,:)-LOCAL_k%pt(ik_local,:)
-       !
-       if ((abs(v_norm(tmp_dist)-dot_product(tmp_dist,circuit_versor(:,ik_local)))<1.E-5_SP).and.&
-       &    iku_v_norm(tmp_dist)<=iku_v_norm(circuit_dist(:,ik_local))                            ) then
-         Grid_to_path_map(ik_local,ik_bz_grid)=ik_bz_grid
-         n_points=n_points+1
-       endif
-       n_points_max=max(n_points,n_points_max)
-       !
-     enddo
-     !
-   enddo
-   !
-   YAMBO_FREE(circuit_versor)
-   YAMBO_FREE(circuit_dist  )
+   call define_grid_map(Xk,Local_k,Grid_to_path_map,n_points_max)
    !
    if(n_points_max>1) then
      YAMBO_ALLOC(auxiliary_var,(dims(1):dims(2),maxval(nfiles),nquantities,n_points_max-1))
@@ -336,3 +285,61 @@ subroutine plot_interpolated_values(Xk,Xen,Ef,LOCAL_k,IDs,dims,nquantities,nfile
  endif
  !
 end subroutine plot_interpolated_values
+!
+!
+subroutine define_grid_map(Xk,Local_k,Grid_to_path_map,n_points_max)
+ !
+ use pars,           ONLY:SP
+ use R_lattice,      ONLY:bz_samp
+ use vec_operate,    ONLY:v_norm,iku_v_norm
+ !
+#include<y_memory.h>
+ !
+ type(bz_samp),  intent(in)  :: Xk,LOCAL_k
+ integer,        intent(out) :: Grid_to_path_map(LOCAL_k%nbz,Xk%nbz)
+ integer,        intent(out) :: n_points_max 
+ !
+ ! Workspace
+ !
+ integer               :: n_points,ik_local,ik_bz_grid
+ real(SP)              :: tmp_dist(3)
+ real(SP), allocatable :: circuit_versor(:,:),circuit_dist(:,:)
+ !
+ ! Define a map between k-points in grid and nearest k-point in circuit
+ !
+ YAMBO_ALLOC(circuit_versor,(3,LOCAL_k%nbz))
+ YAMBO_ALLOC(circuit_dist  ,(3,LOCAL_k%nbz))
+ !
+ Grid_to_path_map =-1
+ n_points=1
+ !
+ do ik_local=1,LOCAL_k%nbz-1
+   tmp_dist=LOCAL_k%pt(ik_local+1,:)-LOCAL_k%pt(ik_local,:)
+   circuit_dist  (:,ik_local)=tmp_dist
+   circuit_versor(:,ik_local)=tmp_dist/v_norm(tmp_dist)
+ enddo
+ circuit_versor(:,ik_local)=circuit_versor(:,ik_local-1)
+ !
+ n_points_max=0
+ do ik_local=1,LOCAL_k%nbz
+   !
+   n_points=0
+   do ik_bz_grid=1,Xk%nbz
+     !
+     tmp_dist=Xk%ptbz(ik_bz_grid,:)-LOCAL_k%pt(ik_local,:)
+     !
+     if ((abs(v_norm(tmp_dist)-dot_product(tmp_dist,circuit_versor(:,ik_local)))<1.E-5_SP).and.&
+     &    iku_v_norm(tmp_dist)<=iku_v_norm(circuit_dist(:,ik_local))                            ) then
+       Grid_to_path_map(ik_local,ik_bz_grid)=ik_bz_grid
+       n_points=n_points+1
+     endif
+     n_points_max=max(n_points,n_points_max)
+     !
+   enddo
+   !
+ enddo
+ !
+ YAMBO_FREE(circuit_versor)
+ YAMBO_FREE(circuit_dist  )
+ !
+end subroutine define_grid_map

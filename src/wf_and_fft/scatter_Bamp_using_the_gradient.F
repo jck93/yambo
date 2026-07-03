@@ -1,25 +1,11 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2015 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+#include<dev_defs.h>
 !
 subroutine scatter_Bamp_using_the_gradient(isc,which)
  !
@@ -75,27 +61,23 @@ subroutine scatter_Bamp_using_the_gradient(isc,which)
    !
    ! \tilde{\rho} in Real Space
    !
-#if defined _OPENMP
-   !$omp parallel default(shared), private(ir)
-   !$omp do
-#endif
+   !DEV_OMP parallel default(shared), private(ir)
+   !DEV_OMP do
    do ir = 1, fft_size
      if (which=="i")  isc%rho_tw_rs(ir) = conjg(WF_der(ir,1,ic))*isc%WF_symm_o(ir,1)
      if (which=="o")  isc%rho_tw_rs(ir) = conjg(isc%WF_symm_i(ir,1))*WF_der(ir,1,ic)
    enddo
-#if defined _OPENMP
-   !$omp end do
-#endif
+   !DEV_OMP end do
    !
    if (n_spinor==2) then
-   !$omp do
+   !DEV_OMP do
      do ir = 1, fft_size
        if (which=="i") isc%rho_tw_rs(ir) = isc%rho_tw_rs(ir) + conjg(WF_der(ir,2,ic))*isc%WF_symm_o(ir,2)
        if (which=="o") isc%rho_tw_rs(ir) = isc%rho_tw_rs(ir) + conjg(isc%WF_symm_i(ir,2))*WF_der(ir,2,ic)
      enddo
-   !$omp end do
+   !DEV_OMP end do
    endif
-   !$omp end parallel
+   !DEV_OMP end parallel
    !
    ! perform the actual FFT
    !
@@ -112,19 +94,19 @@ subroutine scatter_Bamp_using_the_gradient(isc,which)
    !
 #if defined _OPENMP
    if (qs==idt_index) then 
-     !$omp parallel do default(shared), private(ig,ig_)
+     !DEV_OMP parallel do default(shared), private(ig,ig_)
      do ig = 1, isc%ngrho
        ig_ =isc%ngrho*(ic-1)+ig
        isc%rhotw(ig_)= isc%rho_tw_rs(fft_g_table(ig,iGo))
      enddo
-     !$omp end parallel do
+     !DEV_OMP end parallel do
    else
-     !$omp parallel do default(shared), private(ig,ig_)
+     !DEV_OMP parallel do default(shared), private(ig,ig_)
      do ig = 1, isc%ngrho
        ig_ =isc%ngrho*(ic-1)+ig
        isc%rhotw(ig_)= isc%rho_tw_rs(fft_g_table(g_rot(qs,ig),iGo))
      enddo
-     !$omp end parallel do
+     !DEV_OMP end parallel do
    endif
 #else
    do ig = 1,isc%ngrho

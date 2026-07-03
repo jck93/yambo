@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2016 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): MG CA
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine NL_Hamiltonian(E,k,q,X,Time,i_time,V_bands)
  !
@@ -29,10 +13,11 @@ subroutine NL_Hamiltonian(E,k,q,X,Time,i_time,V_bands)
  !                                        
  use pars,           ONLY:SP,cZERO,pi,cONE
  use units,          ONLY:SPEED_OF_LIGHT
+ use FFT_m,          ONLY:fft_size
  use electrons,      ONLY:levels,n_sp_pol
  use R_lattice,      ONLY:bz_samp
  use drivers,        ONLY:l_use_Hxc_collisions
- use hamiltonian,    ONLY:rho_n,H_nl_sc,V_hartree_sc,V_xc_sc
+ use hamiltonian,    ONLY:rho_n,H_nl_sc,V_hartree_sc,V_xc_sc,H_ref_bands
  use QP_m,           ONLY:QP_nk
  use X_m,            ONLY:global_gauge,X_t
  use fields,         ONLY:A_ext,A_tot,Efield
@@ -42,7 +27,7 @@ subroutine NL_Hamiltonian(E,k,q,X,Time,i_time,V_bands)
  use xc_functionals, ONLY:V_xc,XC_potential_driver
  use nl_optics,      ONLY:Correlation,V_xc_0,full_rho,IPA,E_full,LRC,JGM,LRCW,l_use_DIPOLES,NL_LRC_alpha,   &
 &                         NL_initial_P,E_tot,E_ext,E_ks,E_xc_0,I_relax,Alpha_ED,dG,eval_dG, & 
-&                         NL_bands,VAL_BANDS,NL_P
+&                         NL_bands,VAL_BANDS,NL_P,LSEX,LHF,Wk_EQ
  use global_XC,      ONLY:WF_xc_functional,WF_kind
  use parallel_m,     ONLY:PAR_IND_Xk_ibz,PAR_Xk_ibz_index
  use wrapper_omp,    ONLY:M_plus_alpha_M_omp
@@ -63,41 +48,48 @@ subroutine NL_Hamiltonian(E,k,q,X,Time,i_time,V_bands)
  !
  ! Working Space
  !
- integer     :: ik,i_sp_pol,is,i1,ik_mem
+ integer     :: ik,i_sp_pol,is,ir,i1,ik_mem
  complex(SP) :: E_vec_pot(3),E_xc_pot(3)
+ complex(SP) :: Wk(3,H_ref_bands(1):H_ref_bands(2),H_ref_bands(1):H_ref_bands(2))
  real :: alpha_
  !
 #if defined _TIMING
  call timing('NL Hamiltonian',OPR='start')
 #endif
  !
- if(.not.l_use_Hxc_collisions.or..not.COLLISIONS_have_HARTREE) then
+ if(eval_HARTREE .or.  eval_DFT) then
    !
-   if(eval_HARTREE .or.  eval_DFT) then
-     !
-     call NL_build_valence_bands(E,V_bands,VAL_BANDS,NL_bands(1))
-     !
-     call el_density_vbands(E,k,rho_n,VAL_BANDS)
-     !
-   endif
+   call NL_build_valence_bands(E,V_bands,VAL_BANDS,NL_bands(1))
    !
-   if(eval_HARTREE) call V_Hartree(rho_n-rho_reference,V_hartree_sc)
-   !
-   ! I reconstruct the full density if necessary because both TDDFT 
-   ! and JGM are not linear in rho_n and require the full density
-   ! 
-   if(eval_DFT) then
-     !
-     if(NL_bands(1)>1) rho_n=full_rho+rho_n-rho_reference
-     !
-     ! Reconstruct the full density
-     !
-     call XC_potential_driver(E,k,WF_kind,WF_xc_functional,1)
-     V_xc_sc=V_xc-V_xc_0
-     !
-   endif
+   call el_density_vbands(E,k,rho_n,VAL_BANDS)
    !
  endif
+ !
+ if(eval_HARTREE) call V_Hartree(rho_n-rho_reference,V_hartree_sc)
+ !
+ ! I reconstruct the full density if necessary because both TDDFT 
+ ! and JGM are not linear in rho_n and require the full density
+ ! 
+ if(eval_DFT) then
+   !
+   if(NL_bands(1)>1) rho_n=full_rho+rho_n-rho_reference
+   !
+   ! Reconstruct the full density
+   !
+   call XC_potential_driver(E,k,WF_kind,WF_xc_functional,1)
+!$omp parallel do default(shared), private(ir,i_sp_pol), collapse(2)
+   do ir=1,fft_size
+     do i_sp_pol=1,n_sp_pol
+       V_xc_sc(ir,i_sp_pol)=V_xc(ir,i_sp_pol)-V_xc_0(ir,i_sp_pol)
+     enddo
+   enddo
+!$omp end parallel do
+   !
+ endif
+ !
+ ! Evaluate the G_lesser for current/polarization and collisions
+ ! ======================================================
+ if(eval_dG)              call NL_build_dG_lesser(E,V_bands,dG)
  !
  ! Evaluate the Polarization 
  ! ===================================================================
@@ -171,16 +163,17 @@ subroutine NL_Hamiltonian(E,k,q,X,Time,i_time,V_bands)
     !
  endif
  !
- ! Evaluate the G_lesser if using TD-SEX or TD-HF and than add COLLISIONS
- ! ======================================================
- if(eval_dG)              call NL_build_dG_lesser(E,V_bands,dG)
+ ! Calculate collisions
+ ! =======================================
  if(l_use_Hxc_collisions) call COLLISIONS_compose_nl(dG)
  !
  ! Build the Hamiltonian
  ! =====================
  !
+!$OMP WORKSHARE  
  Ho_plus_Sigma=cZERO
  I_relax      =cZERO
+!$OMP END WORKSHARE 
  !
  do i_sp_pol=1,n_sp_pol
   do ik=1,QP_nk
@@ -222,15 +215,27 @@ subroutine NL_Hamiltonian(E,k,q,X,Time,i_time,V_bands)
    else
      !
      ! Use Sm1_plus, Sm1_minus and V_bands to build the W operator
-     !
-     call  Build_W_operator(E,k,A_tot,ik,i_sp_pol,V_bands(:,:E%nbf(i_sp_pol),:,i_sp_pol),H_nl_sc)
+     ! I split the W(E)*E operator as:
+     ! W(0)*E+[W(E)-W(0)]*E
+     ! becasue W(0) is at Equilibrium and can by symmetrized easily
+     ! 
+     call Build_W_operator(E,k,ik,i_sp_pol,V_bands(:,:E%nbf(i_sp_pol),:,i_sp_pol),Wk)
+     if(allocated(Wk_EQ)) then
+       !  This part of the operator is symmetriezed before the dynamics
+       call Apply_W_field(A_tot,Wk-Wk_EQ(:,:,:,i_sp_pol,ik_mem),H_nl_sc)
+       call RT_Apply_field(ik,i_sp_pol,H_nl_sc,A_tot)
+     else
+       call Apply_W_field(A_tot,Wk,H_nl_sc)
+     endif
      !
    endif                                                         
+   !
+!   if(Correlation==LSEX.or.Correlation==LHF) call OSCLL_compose_nl(dG,H_nl_sc,k,q,E,ik,i_sp_pol)
+   if(Correlation==LSEX.or.Correlation==LHF) call OSCLL_compose_vbands(V_bands,H_nl_sc,k,q,E,ik,i_sp_pol)
    !
    if(l_use_Hxc_collisions) then
      call M_plus_alpha_M_omp(RT_nbands,cONE,RT_Vnl_xc(NL_bands(1):NL_bands(2),NL_bands(1):NL_bands(2),ik,i_sp_pol),&
 &                                            H_nl_sc(NL_bands(1):NL_bands(2),NL_bands(1):NL_bands(2)))
-
    endif
    !
    ! Damping: NL_damping fills the I_relax matrix 
@@ -246,7 +251,7 @@ subroutine NL_Hamiltonian(E,k,q,X,Time,i_time,V_bands)
 !$omp end parallel do
    !
   enddo  !---- loop on k-point
- enddo
+ enddo  !---- loop in spin polarizations
  !
 #if defined _TIMING
  call timing('NL Hamiltonian',OPR='stop')

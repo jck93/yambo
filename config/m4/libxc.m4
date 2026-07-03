@@ -18,8 +18,6 @@
 ## $Id: libxc.m4 800 2013-10-09 11:18:39Z micael $
 
 AC_DEFUN([ACX_LIBXC], [
-acx_libxc_ok=no
-compile_libxc=yes
 
 dnl Check if the library was given in the command line
 dnl if not, use environment variables or defaults
@@ -33,17 +31,9 @@ AC_ARG_WITH(libxc_includedir, [AS_HELP_STRING([--with-libxc-includedir=<path>],
             [Path to the libxc include directory],[32])])
 
 
+acx_libxc_ok="no"
 internal_libxc="no"
 compile_libxc="no"
-
-if test -d "$with_libxc_path"; then
-   libxc_incdir="$with_libxc_path/include"
-   libxc_libdir="$with_libxc_path/lib"
-fi
-if test -d "$with_libxc_includedir"; then libxc_incdir="$with_libxc_includedir" ; fi
-if test -d "$with_libxc_libdir";     then libxc_libdir="$with_libxc_libdir" ; fi
-
-LIBXC_INCS="$IFLAG$libxc_incdir"
 
 dnl Backup LIBS and FCFLAGS
 acx_libxc_save_LIBS="$LIBS"
@@ -61,38 +51,50 @@ testprog="AC_LANG_PROGRAM([],[
     i = XC_EXCHANGE
 ])"
 
-FCFLAGS="$LIBXC_INCS $acx_libxc_save_FCFLAGS"
 
 # set from environment variable, if not blank
 if test ! -z "$LIBXC_LIBS"; then
   LIBS="$LIBXC_LIBS"
+  FCFLAGS="$LIBXC_INCS $acx_libxc_save_FCFLAGS"
 dnl $acx_libxc_save_LIBS"
   AC_LINK_IFELSE($testprog, [acx_libxc_ok=yes], [])
 fi
 
-# set from --with-libxc-libs flag
-if test x"$acx_libxc_ok" = xno && test ! -z "$with_libxc_libs" ; then
-  LIBXC_LIBS="$with_libxc_libs"
+# set from configure flags
+if test x"$acx_libxc_ok" = xno ; then
+  #
+  LIBXC_LIBS="-lxcf90 -lxcf03 -lxc"
+  LIBXC_INCS=""
+  #
+  if test -d "$with_libxc_path"; then
+     libxc_incdir="$with_libxc_path/include"
+     libxc_libdir="$with_libxc_path/lib"
+  fi
+  if test -d "$with_libxc_includedir"; then libxc_incdir="$with_libxc_includedir" ; fi
+  if test -d "$with_libxc_libdir";     then libxc_libdir="$with_libxc_libdir" ; fi
+  #
+  # dynamic linkage, separate Fortran interface
+  if test ! -z "$libxc_libdir"; then LIBXC_LIBS="-L$libxc_libdir -lxcf90 -lxcf03 -lxc"; fi
+  if test ! -z "$libxc_incdir"; then LIBXC_INCS="$IFLAG$libxc_incdir"; fi
+  #
+  if test ! -z "$with_libxc_libs" ; then LIBXC_LIBS="$with_libxc_libs" ; fi
+  if test ! -z "$with_libxc_incs" ; then LIBXC_INCS="$with_libxc_incs" ; fi
+
   LIBS="$LIBXC_LIBS"
+  FCFLAGS="$LIBXC_INCS $acx_libxc_save_FCFLAGS"
+
 dnl $acx_libxc_save_LIBS"
   AC_LINK_IFELSE($testprog, [acx_libxc_ok=yes], [])
+  
+  # if dynamic / user provided linkage did not work, try static one
+  if test x"$acx_libxc_ok" = xno && test ! -z "$libxc_libdir"; then
+    LIBXC_LIBS="$libxc_libdir/libxcf90.a $libxc_libdir/libxcf03.a  $libxc_libdir/libxc.a"
+    LIBS="$LIBXC_LIBS"
+dnl $acx_libxc_save_LIBS"
+    AC_LINK_IFELSE($testprog, [acx_libxc_ok=yes], [])
+  fi
 fi
 
-# dynamic linkage, separate Fortran interface
-if test x"$acx_libxc_ok" = xno; then
-  LIBXC_LIBS="-L$libxc_libdir -lxcf90 -lxcf03 -lxc"
-  LIBS="$LIBXC_LIBS"
-dnl $acx_libxc_save_LIBS"
-  AC_LINK_IFELSE($testprog, [acx_libxc_ok=yes], [])
-fi
-
-# static linkage, separate Fortran interface
-if test x"$acx_libxc_ok" = xno; then
-  LIBXC_LIBS="$libxc_libdir/libxcf90.a $libxc_libdir/libxcf03.a  $libxc_libdir/libxc.a"
-  LIBS="$LIBXC_LIBS"
-dnl $acx_libxc_save_LIBS"
-  AC_LINK_IFELSE($testprog, [acx_libxc_ok=yes], [])
-fi
 
 dnl The following programs will only work with specific version of libxc
 testprog_5x="AC_LANG_PROGRAM([],[
@@ -175,7 +177,8 @@ if test x"$acx_libxc_ok" = xno; then
   have_configured="no"
   internal_libxc="yes"
   # version 5 is used
-  LIBXC_LIBS="${extlibs_path}/${FCKIND}/${FC}/lib/libxcf90.a ${extlibs_path}/${FCKIND}/${FC}/lib/libxcf03.a  ${extlibs_path}/${FCKIND}/${FC}/lib/libxc.a"
+  #LIBXC_LIBS="${extlibs_path}/${FCKIND}/${FC}/lib/libxcf90.a ${extlibs_path}/${FCKIND}/${FC}/lib/libxcf03.a  ${extlibs_path}/${FCKIND}/${FC}/lib/libxc.a"
+  LIBXC_LIBS="-L${extlibs_path}/${FCKIND}/${FC}/lib/ -lxcf90 -lxcf03 -lxc"
   LIBXC_INCS="$IFLAG${extlibs_path}/${FCKIND}/${FC}/include"
   if test -e "${extlibs_path}/${FCKIND}/${FC}/lib/libxc.a" && test -e "${extlibs_path}/${FCKIND}/${FC}/lib/libxcf90.a" && test -e ${extlibs_path}/${FCKIND}/${FC}/lib/libxcf03.a; then
     compile_libxc="no"

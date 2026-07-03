@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 module collision_ext
  !
@@ -27,15 +11,15 @@ module collision_ext
  ! EXTENDED COLLISION
  !====================
  !
- use pars,       ONLY:SP,LP,schlen
+ use pars,       ONLY:SP,SP6,LP,schlen
  use parallel_m, ONLY:PP_indexes
  !
  implicit none
  !
  integer :: COLL_bands(2)
  integer :: COLL_ID
- integer :: LAST_COLL_sync
- integer :: PAR_COLL_min
+ integer :: LAST_COLL_sync = 0
+ integer :: PAR_COLL_min   = 0
  !
  ! Cut off on exchange matrix elements
  ! Sx_cutoff=0 all, (Sx_cutoff>1 or Sx_cutoff<0)=none
@@ -49,6 +33,8 @@ module collision_ext
  logical :: COLLISIONS_HXC_MB=.FALSE.
  logical :: COLLISIONS_HXC_use_TDDFT=.FALSE.
  logical :: COLLISIONS_CV_only=.FALSE.
+ logical :: COLLISIONS_load_SP=.FALSE.  ! Force loading of collision in single precision
+ logical :: COLLISIONS_compr  =.FALSE. ! If parallel-io is used collisions in memory are compressed
  !
  ! Elements used in the code
  !
@@ -65,8 +51,9 @@ module collision_ext
  type COLLISIONS_element
    integer               :: I=0         ! State Index 
    integer               :: N=0         ! Linear Dimension
-   character,   allocatable  :: table(:,:,:)
-   complex(SP), allocatable  :: v_c(:)       ! SEX and HF
+   character,      allocatable  :: table(:,:,:)
+   complex(SP),  allocatable  :: v_c(:)      
+   complex(SP6), allocatable  :: v_c_SP(:)    ! SEX and HF only in single precision
    complex(SP), allocatable  :: v3_c(:,:,:)
    real(SP)   , allocatable  :: v_r(:)       ! GW NEQ collisions
    real(SP)   , allocatable  :: v3_r(:,:,:)
@@ -104,6 +91,13 @@ module collision_ext
  type(COLLISIONS_element), allocatable :: COH_COLL_element(:)
  type(COLLISIONS_element), allocatable :: HXC_COLL_element(:)
  type(COLLISIONS_element), allocatable :: P_COLL_element(:)
+ !
+ ! On the fly long-range SEX (LSEX) collisions
+ ! ====================================
+ integer :: ng_oscll                  ! number of G-vectors in the Oscillators
+ complex(SP), allocatable :: W(:,:,:) ! screened interaction
+ complex(SP), allocatable :: OSCLL(:,:,:,:,:) ! Oscillators
+ complex(SP), allocatable :: OSCLL_k(:,:,:,:) ! Oscillators in k, just for the evaluation
  !
  contains
    !

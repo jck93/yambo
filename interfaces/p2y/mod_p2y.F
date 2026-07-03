@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM, AF, DV
+! Copyright (C) 2007 The Yambo Team
 !
-! This file is distributed under the terms of the GNU
-! General Public License. You can redistribute it and/or
-! modify it under the terms of the GNU General Public
-! License as published by the Free Software Foundation;
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will
-! be useful, but WITHOUT ANY WARRANTY; without even the
-! implied warranty of MERCHANTABILITY or FITNESS FOR A
-! PARTICULAR PURPOSE.  See the GNU General Public License
-! for more details.
-!
-! You should have received a copy of the GNU General Public
-! License along with this program; if not, write to the Free
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AM AF DV
 !
 module P2Ym
  !
@@ -35,7 +19,7 @@ module P2Ym
  use parallel_int,          ONLY : PP_bcast   
  use units,                 ONLY : Da2AU
  ! 
-#include<memory.h>
+#include<y_memory.h>
  !
  character(lchlen) :: index_filename
  character(lchlen) :: dftdata_fmt
@@ -326,7 +310,7 @@ contains
    use D_lattice,   ONLY:n_atoms_species_max,n_atomic_species,n_atoms_species, &
 &                        atom_pos, Z_species,atomic_number,atom_mass,atoms_map
    ! 
-#include<memory.h>
+#include<y_memory.h>
    !
    ! Work Space
    !
@@ -564,7 +548,7 @@ contains
    use D_lattice,   ONLY:alat
    use vec_operate, ONLY:v_is_zero 
    !
-#include<memory.h> 
+#include<y_memory.h> 
    !
    type(bz_samp) :: k
    !
@@ -633,7 +617,7 @@ contains
    use pars,        only: pi
    use R_lattice,   ONLY: b, ng_vec, g_vec
    use D_lattice,   ONLY: alat
-#include<memory.h>
+#include<y_memory.h>
    !
    YAMBO_ALLOC(g_vec,(ng_vec,3)) ! The YAMBO array
    !

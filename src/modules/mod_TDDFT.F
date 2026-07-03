@@ -1,30 +1,14 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2006 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AM DS
 !
 module TDDFT
  !
  use descriptors,ONLY:IO_desc
- use pars,       ONLY:SP,lchlen,schlen
+ use pars,       ONLY:SP,DP,lchlen,schlen
  !
  implicit none
  !
@@ -41,12 +25,21 @@ module TDDFT
  character(schlen):: FXC_PF_alpha
 ! logical          :: FXC_is_causal
  logical          :: FXC_is_retarded
+ logical          :: l_Fxc_from_Vxc
  !
  real(SP),    allocatable :: FXC_K_diagonal(:)
  complex(SP), allocatable :: F_xc_gspace(:,:,:)
  !
- character(10)     :: ALDA_cut_scheme
+ type tddft_wf_t
+   complex(DP), allocatable :: rhotwr_DP(:)
+   complex(SP), allocatable :: rhotwr1(:)
+   complex(SP), allocatable :: rhotwr2(:)
+   complex(SP), allocatable :: WF_symm1(:,:)
+   complex(SP), allocatable :: WF_symm2(:,:)
+ end type tddft_wf_t
  !
+ character(12)     :: FXC_mode
+   !
  interface 
    !
    integer function io_BS_Fxc(iq,W,ID,X)

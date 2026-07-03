@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2013 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM CA DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine COLLISIONS_load(CHECK_EXISTENCE_ONLY)
  !
@@ -36,12 +20,16 @@ subroutine COLLISIONS_load(CHECK_EXISTENCE_ONLY)
  use hamiltonian,     ONLY:H_kind
  use global_XC,       ONLY:H_SE_FOCK,H_SE_COH,H_SE_SEX,QP_SE_GW_NEQ,H_SE_HARTREE
  use collision_ext,   ONLY:HXC_COLL_element,COH_COLL_element,COLLISIONS_have_HARTREE,&
-&                          COH_collisions,HXC_collisions,COLLISIONS_group,COLLISIONS_naming
+&                          COH_collisions,HXC_collisions,COLLISIONS_group,COLLISIONS_naming, &
+&                          COLLISIONS_compr,COLLISIONS_load_SP
  use IO_int,          ONLY:io_control
  use IO_m,            ONLY:OP_RD,RD,RD_CL,OP_RD_CL,VERIFY,REP,NONE
  use parallel_m,      ONLY:PAR_IND_Plasma,PAR_IND_Q_bz,PAR_Q_bz_index,PAR_PLASMA_index
  use COLL_interfaces, ONLY:io_COLLISIONS
  use timing_m,        ONLY:timing
+ use stderr,          ONLY:real2ch
+ use pars,            ONLY:SP,rZERO
+ use com,             ONLY:msg
 #if defined _QED || defined _RT
  use global_XC,       ONLY:QP_SE_GW_QED
  use collision_ext,   ONLY:P_COLL_element,COLL_bands,P_collisions,GW_NEQ_collisions,&
@@ -62,6 +50,9 @@ subroutine COLLISIONS_load(CHECK_EXISTENCE_ONLY)
  !
 #if defined _PAR_IO
  integer, external :: io_COLLs_header
+#if defined _NL
+ real(SP)  :: COLL_full,COLL_compr
+#endif
 #endif
  !
  io_err      =0
@@ -133,8 +124,8 @@ subroutine COLLISIONS_load(CHECK_EXISTENCE_ONLY)
    !
    if (l_use_COH_collisions.and.l_sc_sex.and..not.l_use_Hxc_collisions) l_error=.TRUE.
    !
-   if (l_error)   call error(  ' HXC collisions not found / not compatible')
-   if (l_warning) call warning(' HXC collisions not found. Potential is computed on the fly.')
+   if (l_error)   call error(  ' HXC collisions not found/not compatible')
+   if (l_warning) call warning(' HXC collisions not found/not compatible. Potential is computed on the fly.')
    !
    l_use_scatt_collisions=all(io_err(3:4)==0).and.(l_elphoton_scatt.or.l_elphoton_corr.or.l_elel_scatt)
    if (io_err(3)/=0)                 call error(' el-el scatt collisions not found / not compatible') 
@@ -238,6 +229,12 @@ subroutine COLLISIONS_load(CHECK_EXISTENCE_ONLY)
      IO_ACT=RD
 #endif
      !
+#if defined _PAR_IO
+#if defined _NL
+    COLL_full =rZERO
+    cOLL_compr=rZERO
+#endif
+#endif
      do i_coll=1,COLL%N
        !
        if (.not.COLL%PAR_IND%element_1D(i_coll)) cycle
@@ -319,6 +316,16 @@ subroutine COLLISIONS_load(CHECK_EXISTENCE_ONLY)
        !
        call live_timing(steps=1)
        !
+#if defined _PAR_IO
+#if defined _NL
+       if(COLLISIONS_compr) then
+         COLL_full=COLL_full+HXC_COLL_element(i_coll_mem)%N
+         call COLLISIONS_compress(HXC_COLL_element(i_coll_mem))
+         COLL_compr=COLL_compr+HXC_COLL_element(i_coll_mem)%N
+       endif
+#endif
+#endif
+       !
      end do
      !
 #if defined _PAR_IO
@@ -337,6 +344,17 @@ subroutine COLLISIONS_load(CHECK_EXISTENCE_ONLY)
 #endif
      !
      call live_timing()
+     !
+#if defined _PAR_IO
+#if defined _NL
+     if(COLLISIONS_compr) then
+       if(COLLISIONS_load_SP)      call msg('sl','Collisions compression: ' &
+ &              //trim(real2ch(50.0-COLL_compr/COLL_full*50.0))//' %')
+       if(.not.COLLISIONS_load_SP) call msg('sl','Collisions compression: ' &
+&               //trim(real2ch(100.0-COLL_compr/COLL_full*100.0))//' %')
+     endif
+#endif
+#endif
      !
    end subroutine
    !

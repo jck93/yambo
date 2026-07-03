@@ -1,25 +1,11 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2014 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+#include<dev_defs.h>
 !
 integer function io_DB1_selective_scan(what,DB1_path,E,k,db1_alat,db1_a,COM_mode)
  !
@@ -32,15 +18,12 @@ integer function io_DB1_selective_scan(what,DB1_path,E,k,db1_alat,db1_a,COM_mode
  use D_lattice,        ONLY:dl_sop,n_atoms_species,Z_species,atom_pos,&
 &                           atom_mass,atoms_map,nsym,alat
  use R_lattice,        ONLY:g_vec,rl_sop,bz_samp,bz_samp_reset
- use wave_func,        ONLY:wf_nc_k,wf_igk
-#ifdef _CUDA
- use wave_func,        ONLY:wf_igk_d
-#endif
+ use wave_func,        ONLY:wf_nc_k,wf_igk,DEV_VAR(wf_igk)
  use com,              ONLY:core_io_path
  use IO_m,             ONLY:OP_RD_CL,NONE,DUMP
  use IO_int,           ONLY:io_control,io_connect,io_disconnect,io_elemental,io_bulk
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels)      :: E
  type(bz_samp)     :: k
@@ -90,10 +73,9 @@ integer function io_DB1_selective_scan(what,DB1_path,E,k,db1_alat,db1_a,COM_mode
      YAMBO_FREE(dl_sop)
      YAMBO_FREE(rl_sop)
      YAMBO_FREE(wf_nc_k)
+     !
+     YAMBO_FREE_GPU(DEV_VAR(wf_igk))
      YAMBO_FREE(wf_igk)
-#ifdef _CUDA
-     YAMBO_FREE(wf_igk_d)
-#endif
    endif
    if (allocated(n_atoms_species)) then
      YAMBO_FREE(n_atoms_species)

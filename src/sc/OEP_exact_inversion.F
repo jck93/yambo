@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2007 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): MG
-!
-! This file is distributed under the terms of the GNU
-! General Public License. You can redistribute it and/or
-! modify it under the terms of the GNU General Public
-! License as published by the Free Software Foundation;
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will
-! be useful, but WITHOUT ANY WARRANTY; without even the
-! implied warranty of MERCHANTABILITY or FITNESS FOR A
-! PARTICULAR PURPOSE.  See the GNU General Public License
-! for more details.
-!
-! You should have received a copy of the GNU General Public
-! License along with this program; if not, write to the Free
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine OEP_exact_inversion(X,E,k,Voep,W_x)
  !
@@ -35,7 +19,8 @@ subroutine OEP_exact_inversion(X,E,k,Voep,W_x)
  !
  use pars,            ONLY:SP,DP
  use D_lattice,       ONLY:DL_vol,i_time_rev,sop_inv,nsym,i_space_inv
- use X_m,             ONLY:X_t, X_ALLOC_elemental,X_mat,X_poles_tab,current_iq 
+ use ALLOC,           ONLY:X_ALLOC_elemental
+ use X_m,             ONLY:X_t,X_mat,X_poles_tab,current_iq 
  use electrons,       ONLY:levels,n_met_bands
  use R_lattice,       ONLY:bz_samp,g_rot,nkibz,nkbz
  use FFT_m,           ONLY:fft_size,fft_g_table,fft_dim,fftw_plan
@@ -47,7 +32,7 @@ subroutine OEP_exact_inversion(X,E,k,Voep,W_x)
  !
  ! I/O
  !
-#include<memory.h>
+#include<y_memory.h>
  real(SP),intent(out)    :: Voep(fft_size)
  complex(SP),intent(in)  :: W_x(nkibz,maxval(n_met_bands),fft_size)
  type(X_t)    :: X

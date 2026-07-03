@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 module R_lattice
  !
@@ -27,7 +11,7 @@ module R_lattice
  use descriptors, ONLY:IO_desc
  !
 #include<dev_defs.h>
-#include<memory.h>
+#include<y_memory.h>
  !
  integer, parameter:: MAX_kpts_to_report=50
  !
@@ -40,6 +24,7 @@ module R_lattice
  logical           :: Xk_grid_is_uniform
  logical           :: Xk_grid_new_mapping
  character(schlen) :: k_GRIDS_string="X S B C"
+ integer           :: k_GRIDS_vector(4)=(/1,1,1,1/)
  !
  ! Q/K-sampling
  !
@@ -125,6 +110,7 @@ module R_lattice
  integer, allocatable :: qindx_S(:,:,:)
  integer, allocatable :: qindx_C(:,:,:)
  integer  :: qindx_B_max
+ integer  :: qindx_S_max_Go
  !
  ! SYMs
  !
@@ -135,6 +121,7 @@ module R_lattice
  integer              :: n_g_shells     ! Number of G-shells
  integer              :: ng_vec         ! Number of G-vectors
  integer              :: ng_closed      ! Number of G closed
+ integer              :: G_m_G_maxval   ! Maximum value of G_m_G
  integer ,allocatable :: ng_in_shell(:) ! Number of G in each shell
  integer ,allocatable :: g_rot(:,:)
  integer ,allocatable :: G_m_G(:,:)
@@ -142,7 +129,7 @@ module R_lattice
  real(SP),allocatable :: g_vec(:,:)
  real(SP),allocatable :: E_of_shell(:)  ! Energy associated at each shell
  ! GPUs
- real(SP),allocatable DEV_ATTR :: g_vec_d(:,:)
+ real(SP),allocatable, target DEV_ATTR :: g_vec_d(:,:)
  integer ,allocatable DEV_ATTR :: g_rot_d(:,:)
  integer ,allocatable DEV_ATTR :: G_m_G_d(:,:)
  integer ,allocatable DEV_ATTR :: minus_G_d(:)
@@ -164,10 +151,19 @@ module R_lattice
  integer :: RIM_W_ng
  integer :: RIM_W_n_rand_pts
  logical :: RIM_W_is_diagonal
- logical :: RIM_W_for_graph
- real(SP),   allocatable          :: RIM_W(:,:,:),RIM_W_E(:,:)
- real(SP),   allocatable DEV_ATTR :: RIM_W_d(:,:,:)
- real(DP),   allocatable :: f_coeff(:,:,:,:,:)
+ real(SP),   allocatable, target          :: RIM_W_E(:,:)
+ complex(SP),allocatable, target          :: RIM_W  (:,:,:,:)
+ complex(SP),allocatable, target DEV_ATTR :: RIM_W_d  (:,:,:,:)
+ complex(SP),allocatable, target          :: aux_RIM_W(:,:,:)
+ ! AF: not needed at present
+ !complex(SP),allocatable, target DEV_ATTR :: aux_RIM_W_d(:,:,:)
+ complex(DP),allocatable, target          :: f_coeff(:,:,:,:,:)
+ complex(DP),allocatable, target DEV_ATTR :: f_coeff_d(:,:,:,:,:)
+ character(schlen)  :: rimw_type, rimw_check
+ !
+ ! System-dependent screening terms
+ logical  :: l_Dirac
+ real(SP) :: Dirac_v_f       ! Dirac cone Fermi velocity   (x 10^6 m/s)
  !
  ! Coulomb (including Cutoff)
  !

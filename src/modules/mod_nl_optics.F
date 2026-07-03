@@ -1,25 +1,9 @@
 ! 
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2016 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): MG AC
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 module nl_optics
  !
@@ -27,8 +11,9 @@ module nl_optics
  use pars,            ONLY:SP,schlen,lchlen
  use electrons,       ONLY:levels
  use real_time,       ONLY:NE_steps
+ use R_lattice,       ONLY:bz_samp
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  ! Long range correction field
  !
@@ -80,6 +65,9 @@ module nl_optics
  ! Density matrix
  complex(SP), allocatable :: dG(:,:,:) 
  !
+ ! Sigma sex at equilibrium (for oscillators)
+ complex(SP), allocatable :: Sigma_SEX_EQ(:,:,:,:)
+ !
  ! Integrator Variables
  !
  integer, parameter :: EULER    = 1
@@ -115,18 +103,35 @@ module nl_optics
  integer, parameter :: LRCW   = 6
  integer, parameter :: HF     = 7
  integer, parameter :: SEX    = 8
+ integer, parameter :: LSEX   = 9
+ integer, parameter :: LHF    = 10
  !
  logical :: eval_COLLISIONS
+ logical :: eval_OSCLL
  logical :: eval_dG
  !
  ! Non-linear spectra parameters
  !
  real(SP) :: NL_er(2)
  real(SP) :: NL_estep
+ real(SP) :: NL_ang_step
  integer  :: NL_bands(2)
  integer  :: NL_nbands
+ integer  :: n_angles
+ real(SP) :: max_angle
+ real(SP) :: NL_rot_axis(3)
+ real(SP) :: NL_initial_versor(3)
  integer  :: n_frequencies
- integer  :: n_freqs_todo
+ integer  :: n_runs_todo
+ integer  :: n_runs
+ !
+ logical  :: Loop_on_frequencies
+ logical  :: Loop_on_angles
+ !
+ ! Velocity gauge in indepdent particle
+ !     
+ logical :: l_velocity_IPA=.FALSE.
+ ! 
  !
  ! Pump and probe
  !
@@ -134,21 +139,7 @@ module nl_optics
  ! 
  ! Dephasing time (in units of NL_damping) 
  !
- integer, parameter :: DephMult=5 
- !
- ! Wavefunction sampling
- !
- type NLsampleWF
-   integer              :: n_order     ! Sampling NL order
-   integer              :: n_size      ! Size of sampling
-   integer              :: n_val(2)    ! Number of valence per spin channel
-   integer              :: n_k         ! Number of kpoints
-   logical              :: ison        ! WF sample logical switch 
-   integer, allocatable :: indx_T(:)   ! indexes of time sampling
- end type NLsampleWF
- !
- integer  :: n_order
- type(NLsampleWF) :: WF_sample, WF_sample_ondisk 
+ integer, parameter :: DephMult=6 
  !
  ! Databases input/output
  !
@@ -158,13 +149,19 @@ module nl_optics
  !
  logical  :: l_use_DIPOLES   ! Use standard dipoles (valid only for linear response)
  logical  :: l_eval_CURRENT  ! Evaluate current using the commutator v=[H,r] and the IP formulation
+ logical  :: l_test_OSCLL    ! Test collisions built using OSCLLs vs standard Collisions
  !
+ ! Wk operator at equilibrium 
+ !
+ complex(SP), allocatable :: Wk_EQ(:,:,:,:,:)
+ !     
  ! IO variables
  !
  real(SP),     allocatable :: NL_P_t(:,:)
+ real(SP),     allocatable :: NL_J_t(:,:)
  complex(SP),  allocatable :: E_tot_t(:,:),E_ext_t(:,:), E_ks_t(:,:),V_bands_t(:,:,:,:,:)
  complex(SP)               :: E_tot(3),E_ext(3),E_ks(3)
- logical,      allocatable :: freqs_done(:)
+ logical,      allocatable :: runs_done(:)
  type(IO_desc)             :: NL_desc
  !
  contains
@@ -199,9 +196,12 @@ module nl_optics
      endif          
      !
      if(l_use_Hxc_collisions) then
-       YAMBO_ALLOC(dG,(NL_bands(1):NL_bands(2),NL_bands(1):NL_bands(2),QP_nk))
        YAMBO_ALLOC(RT_Vnl_xc,(NL_bands(1):NL_bands(2),NL_bands(1):NL_bands(2),QP_nk,n_sp_pol))
      endif          
+     !
+     if(eval_dG) then
+       YAMBO_ALLOC(dG,(NL_bands(1):NL_bands(2),NL_bands(1):NL_bands(2),QP_nk))
+     endif
      !
      ! Reference energies
      !
@@ -212,11 +212,10 @@ module nl_optics
      endif
      !
      YAMBO_ALLOC(NL_P_t,(NE_steps,3))
+     YAMBO_ALLOC(NL_J_t,(NE_steps,6))
      YAMBO_ALLOC(E_tot_t,(NE_steps,3))
      YAMBO_ALLOC(E_ext_t,(NE_steps,3))
      YAMBO_ALLOC(E_ks_t,(NE_steps,3))
-     !
-     call NL_ALLOC_WF_sample(WF_sample,NL_bands(2),n_sp_pol)
      !
    end subroutine NL_alloc
    !
@@ -241,6 +240,12 @@ module nl_optics
      endif
      YAMBO_ALLOC(I_relax,(NL_bands(1):NL_bands(2),NL_bands(1):NL_bands(2),maxval(en%nbf),PAR_Xk_nibz,n_sp_pol))
      YAMBO_ALLOC(Ho_plus_Sigma,(NL_bands(1):NL_bands(2),NL_bands(1):NL_bands(2),PAR_Xk_nibz,n_sp_pol))
+     !
+     if(Correlation==LSEX.or.Correlation==LHF) then
+       YAMBO_ALLOC(Sigma_SEX_EQ,(NL_bands(1):NL_bands(2),NL_bands(1):NL_bands(2),n_sp_pol,PAR_Xk_nibz))
+     endif          
+     !  
+     YAMBO_ALLOC(Wk_EQ,(3,NL_bands(1):NL_bands(2),NL_bands(1):NL_bands(2),n_sp_pol,PAR_Xk_nibz))
      !
    end subroutine NL_alloc_k_distributed
    !
@@ -267,19 +272,30 @@ module nl_optics
      !
      if(.not.l_use_DIPOLES) then
        call ELECTRIC_free()
+       YAMBO_FREE(Wk_EQ)
      endif
      !
      YAMBO_FREE(NL_P_t)
+     YAMBO_FREE(NL_J_t)
      YAMBO_FREE(E_tot_t)
      YAMBO_FREE(E_ext_t)
      YAMBO_FREE(E_ks_t)
-     YAMBO_FREE(V_bands_t)
-     !
-     if(l_use_Hxc_collisions) then
+     !	
+     if(eval_dG) then
        YAMBO_FREE(dG)
-       YAMBO_FREE(RT_Vnl_xc)
      endif
      !
+     if(l_use_Hxc_collisions) then
+       YAMBO_FREE(RT_Vnl_xc)
+     endif
+     if(eval_dG) then
+       YAMBO_FREE(dG)
+     endif
+     !
+     if(Correlation==LSEX.or.Correlation==LHF) then
+       YAMBO_FREE(Sigma_SEX_EQ)
+     endif
+     !  
    end subroutine NL_free
    !
    real function Alpha_ED(en,omega)
@@ -291,69 +307,5 @@ module nl_optics
      beta = NL_LRC_alpha/Egap**2
      Alpha_ED = NL_LRC_alpha + beta*omega**2
    end function
-   !
-   subroutine NL_set_WF_sample(W,n,Tstep,Trange,v,k)
-     !
-     type(NLsampleWF),intent(out) :: W
-     integer         ,intent(in)  :: n 
-     real(SP)        ,intent(in)  :: Tstep
-     real(SP)        ,intent(in)  :: Trange(2)
-     integer         ,optional    :: v(2),k 
-     ! ws:
-     integer :: i_t,i_t_start,i_deltaT     
-     !
-     W%ison = .false.
-     if (n > 0) then
-       W%ison = .true.
-       W%n_order = min(n,7)
-       W%n_size = 2*W%n_order + 1
-       if (present(v)) W%n_val = v
-       if (present(k)) W%n_k = k
-       YAMBO_ALLOC(W%indx_T,(W%n_size))
-       i_t_start = nint(Trange(1)/Tstep)+1
-       i_deltaT=nint((Trange(2)-Trange(1))/Tstep)/W%n_size
-       forall(i_t=0:W%n_size-1) W%indx_T(1+i_t) = i_t_start + i_t*i_deltaT 
-     end if
-     !
-   end subroutine NL_set_WF_sample
-   !
-   subroutine NL_COPY_WF_sample(W1,W2)
-     !
-     type(NLsampleWF),intent(in) :: W1
-     type(NLsampleWF),intent(out) :: W2
-     !
-     W2%ison = W1%ison
-     if (W1%ison) then
-       W2%n_order = W1%n_order
-       W2%n_size  = W1%n_size
-       W2%n_val   = W1%n_val 
-       W2%n_k     = W1%n_k
-       YAMBO_ALLOC(W2%indx_T,(W2%n_size))
-       W2%indx_T(:) = W1%indx_T(:)
-     end if
-     !
-   end subroutine NL_COPY_WF_sample
-   !
-   subroutine NL_INIT_WF_sample(W)
-     !
-     type(NLsampleWF),intent(inout) :: W
-     !
-     W%ison = .false.
-     W%n_order = 0
-     W%n_size = 0
-     W%n_val  = 0
-     W%n_k    = 0
-     !
-   end subroutine NL_INIT_WF_sample
-   !
-   subroutine NL_ALLOC_WF_sample(W,nb,ns)
-     !
-     type(NLsampleWF),intent(in) :: W
-     integer,         intent(in) :: nb,ns
-     !
-     if (W%ison) then
-       YAMBO_ALLOC(V_bands_t,(W%n_size,nb,maxval(W%n_val),W%n_k,ns))
-     endif
-   end subroutine NL_ALLOC_WF_sample
    !
 end module

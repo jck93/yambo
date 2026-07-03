@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AF
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 !=====================================================================
 ! Driver to 3D FFT: FFTW, Goedecker
@@ -43,30 +27,74 @@
 !
 !=====================================================================
 !
+#include<dev_defs.h>
+!
 subroutine fft_3d_cuda(c_d,n,fft_sign,cufft_plan)
  !
  use pars,          ONLY:DP
- use cudafor
- use cufft
+ use devxlib_environment
+ use devxlib_async
+#if defined _CUDA
+ use cufft_m
+#endif
+#if defined _OPENACC
+ use openacc
+#endif
+ use gpu_m,  only: gpu_devsync
  !
- implicit none
+#include<y_memory.h> 
+ !
  integer   :: fft_sign,n(3)
  integer   :: cufft_plan
- complex(DP), device :: c_d(n(1),n(2),n(3))
+ complex(DP) DEV_ATTR :: c_d(n(1),n(2),n(3))
+ !
  ! 
  ! Work Space
  !
- integer             :: i_sign,istat
+ integer              :: i_sign,istat
+ complex(DP), allocatable :: tmp_d(:,:,:)
  !
  if (fft_sign>0) i_sign=CUFFT_INVERSE
  if (fft_sign<0) i_sign=CUFFT_FORWARD
  !
  if (cufft_plan==0) then
    !
+#ifdef _OPENACC
+   ! 2022-02-02 DS and AF TO BE FIXED
+# if defined _PGI || defined _NV
+   !istat = cufftSetStream( cufft_plan, acc_get_cuda_stream(acc_async_sync) )
+   istat = cufftSetStream( cufft_plan, acc_get_cuda_stream(acc_async_noval) )
+   ! The following lines, in place of the one above,
+   ! is needed to compile with gfortran
+   ! However they give an error with nvfortran
+# else
+   istat = cufftSetStream( cufft_plan, devxlib_async2stream(acc_async_noval) )
+   !istat = cufftSetStream( cufft_plan, stream_default )
+# endif
+   !istat = gpu_devsync()
+#endif
    istat = cufftPlan3d( cufft_plan, n(3), n(2), n(1), CUFFT_Z2Z )
    !
  endif
  !
+#ifdef _OPENACC
+ ! 2022-02-02 DS and AF TO BE FIXED
+ !DEV_ACC wait(acc_async_noval)
+ !istat = cudaStreamSynchronize(acc_get_cuda_stream(acc_async_noval))
+ istat = gpu_devsync()
+#endif
+ !
+ !DEV_ACC_DEBUG data present(c_d)
+ !DEV_ACC host_data use_device(c_d)
  istat = cufftExecZ2Z( cufft_plan, c_d, c_d, i_sign )
+ !DEV_ACC end host_data
+ !DEV_ACC_DEBUG end data
+ !
+#ifdef _OPENACC
+ !DEV_ACC wait(acc_async_noval)
+ !istat = cudaStreamSynchronize(acc_get_cuda_stream(acc_async_noval))
+ istat = gpu_devsync()
+#endif
  !
 end subroutine fft_3d_cuda
+

@@ -1,38 +1,24 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): MG,DV
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2006 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
+! Authors (see AUTHORS file for details): MGDV
 !
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+#include<dev_defs.h>
 !
 subroutine scatter_ModScr(isc,mu)
  !
  ! multiply scatterGamp by exp((-|q+G|^2)/(4\mu^2))
  !
- use pars,          ONLY:SP,pi
- use collision_el,  ONLY:elemental_collision
- use drivers,       ONLY:l_col_cut
- use R_lattice,     ONLY:bare_qpg,d3q_factor
- use global_XC,     ONLY:WF_xc_functional
- use xc_functionals,ONLY:XC_HYB_GGA_XC_GAUPBE,XC_FACTOR
- use cuda_m,        ONLY:have_cuda
- use deviceXlib_m,  ONLY:dev_memcpy 
+ use pars,           ONLY:SP,pi
+ use collision_el,   ONLY:elemental_collision
+ use drivers,        ONLY:l_col_cut
+ use R_lattice,      ONLY:bare_qpg,d3q_factor
+ use global_XC,      ONLY:WF_xc_functional
+ use xc_functionals, ONLY:XC_HYB_GGA_XC_GAUPBE,XC_FACTOR
+ use gpu_m,          ONLY:have_gpu
+ use devxlib,        ONLY:devxlib_memcpy_h2d
  !
  implicit none
  !
@@ -83,7 +69,7 @@ subroutine scatter_ModScr(isc,mu)
    enddo
  enddo
  !
- if (have_cuda) call dev_memcpy(isc%gamp_d,isc%gamp)
+ if (have_gpu) call devxlib_memcpy_h2d(DEV_VAR(isc%gamp),isc%gamp)
  !
  contains
    !

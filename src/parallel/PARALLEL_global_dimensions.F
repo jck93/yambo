@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM, DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2017 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AM DS
 !
 subroutine PARALLEL_global_dimensions(E,Xk,q,ENVIRONMENT)
  !
@@ -27,7 +11,7 @@ subroutine PARALLEL_global_dimensions(E,Xk,q,ENVIRONMENT)
  use parallel_m,    ONLY:PAR_Q_bz_range,PAR_Q_ibz_range,PAR_QP_range,PAR_n_v_bands,PAR_n_c_bands,&
 &                        PAR_EH_range,PAR_Dip_ib,PAR_Dip_ib_lim,PAR_X_ib,PAR_X_iq,PAR_n_G_vectors,&
 &                        PAR_n_freqs,PAR_K_range,PAR_n_bands
- use drivers,       ONLY:l_eval_collisions,l_elph_corr,l_gw0,l_HF_and_locXC,l_life,l_sc_run
+ use drivers,       ONLY:l_eval_collisions,l_elph_corr,l_gw0,l_HF_and_locXC,l_life,l_sc_run,l_nl_optics
  use BS,            ONLY:BS_bands,BS_nT_at_k,BS_n_eh_spaces
  use X_m,           ONLY:X_ng
 #if defined _PHEL
@@ -40,7 +24,7 @@ subroutine PARALLEL_global_dimensions(E,Xk,q,ENVIRONMENT)
  use SC,            ONLY:SC_bands
 #endif
 #if defined _NL
- use nl_optics,     ONLY:n_frequencies
+ use nl_optics,     ONLY:n_runs
 #endif
 #if defined _RT
  use real_time,     ONLY:RT_bands
@@ -51,7 +35,7 @@ subroutine PARALLEL_global_dimensions(E,Xk,q,ENVIRONMENT)
  use electrons,     ONLY:levels
  use R_lattice,     ONLY:bz_samp,nqibz,nqbz
  use QP_m,          ONLY:QP_n_states,QP_nb,QP_n_G_bands
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels)         :: E
  type(bz_samp)        :: Xk,q
@@ -86,9 +70,10 @@ subroutine PARALLEL_global_dimensions(E,Xk,q,ENVIRONMENT)
  if (ENVIRONMENT=="DIPOLES")                          PAR_n_v_bands= (/PAR_Dip_ib(1),PAR_Dip_ib_lim(1)/)
  if (index(ENVIRONMENT, "Response_G_space")>0       ) PAR_n_v_bands= (/PAR_X_ib(1),maxval(E%nbm)/)
 #if defined _NL || defined _SC
- if (index(ENVIRONMENT, "Response_G_space")>0       ) PAR_n_v_bands= (/1,PAR_X_ib(2)/)
-#else
- if (index(ENVIRONMENT, "Response_G_space")>0       ) PAR_n_v_bands= (/PAR_X_ib(1),maxval(E%nbm)/)
+ if (l_sc_run .or. l_nl_optics) then
+   ! DS 2023/07/24 : to check if this is really needed or not
+   if (index(ENVIRONMENT, "Response_G_space")>0     ) PAR_n_v_bands= (/1,PAR_X_ib(2)/)
+ endif
 #endif
  if (ENVIRONMENT=="Response_T_space"                ) PAR_n_v_bands= (/BS_bands(1),maxval(E%nbm)/)
  !
@@ -105,7 +90,9 @@ subroutine PARALLEL_global_dimensions(E,Xk,q,ENVIRONMENT)
 #if defined _PHEL
  if (ENVIRONMENT=="Phonon_Self_Energy")        PAR_Q_ibz_range=PH_Q
 #endif
- if (ENVIRONMENT=="Self_Energy"       ) then
+ !
+ if ((ENVIRONMENT=="Self_Energy").or.(ENVIRONMENT=="Sigma_X")) then
+   PAR_n_G_vectors=X_ng
 #if defined _SC
    if (l_sc_run.and.&
 &      any( (/P_collisions%N,COH_collisions%N,HXC_collisions%N/)> 0))  &
@@ -144,7 +131,7 @@ subroutine PARALLEL_global_dimensions(E,Xk,q,ENVIRONMENT)
  !
  ! Generic Bands
  !---------------
- if (ENVIRONMENT=="Self_Energy"                     ) then
+ if ((ENVIRONMENT=="Self_Energy").or.(ENVIRONMENT=="Sigma_X")) then
    if (l_HF_and_locXC)                               PAR_n_bands=(/1,maxval((/E%nbm(:),QP_nb/))/)
    if ((l_gw0.or.l_life).and..not.computing_Fock)    PAR_n_bands=(/1,max(QP_n_G_bands(2),QP_nb)/)
    if (.not.computing_Fock)                          PAR_n_bands(1)=QP_n_G_bands(1)
@@ -167,10 +154,15 @@ subroutine PARALLEL_global_dimensions(E,Xk,q,ENVIRONMENT)
  !
  ! QP states
  !-----------
- if (ENVIRONMENT=="Self_Energy"                     ) PAR_QP_range=QP_n_states
+ if ((ENVIRONMENT=="Self_Energy").or.(ENVIRONMENT=="Sigma_X")) PAR_QP_range=QP_n_states
+ !
+ ! Oscillators
+#if defined _NL || defined _RT
+ if (ENVIRONMENT=="Oscillators"                     ) PAR_n_bands =COLL_bands
+#endif
  !
 #if defined _NL
- if (ENVIRONMENT=="Non_Linear"                      ) PAR_n_freqs =n_frequencies
+ if (ENVIRONMENT=="Non_Linear"                      ) PAR_n_freqs =n_runs
 #endif
  !
 end subroutine PARALLEL_global_dimensions

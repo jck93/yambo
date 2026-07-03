@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): DS,DV
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2018 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): DS DV
 !
 subroutine p2y_atmproj(filename,k)
  !
@@ -33,7 +17,7 @@ subroutine p2y_atmproj(filename,k)
  use atmproj_tools_module,  ONLY:atmproj_read_ext !,nwfcx
  use qe_pseudo_m,           ONLY:nsp
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  character(schlen), intent(in) :: filename
  type(bz_samp),     intent(in) :: k
@@ -143,7 +127,7 @@ subroutine p2y_atmproj(filename,k)
      enddo
      !
      !DEBUG <
-     !write(*,*) indx
+     !write(*,*) "nproj= ",indx
      !DEBUG >
      !
    end subroutine fill_atomic_table

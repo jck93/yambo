@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine INIT_activate()
  !
@@ -28,8 +12,8 @@ subroutine INIT_activate()
  use stderr,         ONLY:intc,STRING_match
  use global_XC,      ONLY:WF_exx_fraction,WF_exx_screening
  use drivers,        ONLY:l_em1s,l_acfdt,l_HF_and_locXC,l_col_cut,l_alda_fxc,l_bs_fxc,l_optics,l_bse,l_bss,&
-&                         l_chi,l_cohsex,l_life,l_rpa_IP,l_td_hf,l_setup,l_sc_run,l_rim,&
-&                         l_real_time,l_ppa,l_lrc_fxc,l_gw0,l_elel_corr,l_elel_scatt,l_elph_corr,l_td_sex,&
+&                         l_chi,l_cohsex,l_life,l_rpa_IP,l_td_hf,l_setup,l_sc_run,l_rim,l_rim_w,&
+&                         l_real_time,l_ppa,l_mpa,l_lrc_fxc,l_gw0,l_elel_corr,l_elel_scatt,l_elph_corr,l_td_sex,&
 &                         l_elph_Hamiltonian,l_elph_scatt,l_elphoton_corr,l_elphoton_scatt,l_em1d,l_eval_collisions,&
 &                         l_sc_magnetic,l_sc_electric,l_dipoles,l_pf_fxc,l_nl_optics,l_phel_corr,l_nl_p_and_p,l_X
 #if defined _SC || defined _RT
@@ -47,6 +31,7 @@ subroutine INIT_activate()
 #if defined _SCALAPACK
  use drivers,        ONLY:l_slk_test
 #endif
+ use drivers,        ONLY:l_gpu_test
  !
  implicit none
  !
@@ -57,7 +42,7 @@ subroutine INIT_activate()
  !
  !Common
  !
- call initactivate(1,'StdoHash Nelectro ElecTemp BoseTemp OccTresh NLogCPUs DBsIOoff DBsFRAGpm EvalMagn MEM_tresh')
+ call initactivate(1,'StdoHash Nelectro ElecTemp BoseTemp OccTresh NLogCPUs DBsIOoff DBsFRAGpm EvalMagn MEM_tresh DegFix')
  !
  !FFT
  !
@@ -73,8 +58,8 @@ subroutine INIT_activate()
  !
  ! CPU structure
  !
- if ((l_optics.and..not.l_bse).or.l_em1s.or.l_em1d.or.l_ppa.or.l_life.or.l_X) then
-     if (l_em1s.or.l_em1d.or.l_ppa.or.l_life.or.l_X) then
+ if((l_optics.and..not.l_bse).or.l_em1s.or.l_em1d.or.l_ppa.or.l_mpa.or.l_life.or.l_X) then
+     if (l_em1s.or.l_em1d.or.l_ppa.or.l_mpa.or.l_life.or.l_X) then
        call CPU_activate("X_and_IO")
      else
        call CPU_activate("X")
@@ -90,7 +75,11 @@ subroutine INIT_activate()
    call CPU_activate("X_and_IO")  ! Required for finite E-field, l_sc_exx, SC_up_W_iter
  endif
  !
- if ( (l_HF_and_locXC.or.l_gw0.or.l_cohsex.or.l_life) .and. .not.(l_sc_run.or.l_eval_collisions.or.l_phel_corr) ) then
+ if ( l_HF_and_locXC .and. .not.(l_sc_run.or.l_eval_collisions.or.l_phel_corr) ) then
+   call CPU_activate("SX")
+   call initactivate(1,'SX_Threads')
+ endif
+ if ( (l_gw0.or.l_cohsex.or.l_life) .and. .not.(l_sc_run.or.l_eval_collisions.or.l_phel_corr) ) then
    call CPU_activate("SE")
    call initactivate(1,'SE_Threads')
  endif
@@ -101,6 +90,11 @@ subroutine INIT_activate()
    call CPU_activate("SLK")
  endif
 #endif
+ !
+ if (l_gpu_test) then
+   call initactivate(1,"GPUdim")
+   !call CPU_activate("SLK")
+ endif
  !
 #if defined _SC
  if (l_eval_collisions .or. l_sc_run) then
@@ -120,7 +114,8 @@ subroutine INIT_activate()
  if (l_nl_optics) then
    call CPU_activate("NL")
    call CPU_activate("DIP")
-   call initactivate(1,'DIP_Threads NL_Threads')
+   call CPU_activate("OSCLL")
+   call initactivate(1,'DIP_Threads NL_Threads OSCLL_Threads')
  endif
 #endif
  !
@@ -138,7 +133,7 @@ subroutine INIT_activate()
  !
  !Setup
  !
- if (l_setup) call initactivate(1,'MaxGvecs Gthresh K_grids IkSigLim IkXLim NoDiagSC')
+ if (l_setup) call initactivate(1,'MaxGvecs Gthresh K_grids IkSigLim IkXLim NoDiagSC EvalMagn')
 #if defined  _ELPH 
  if (l_setup) call initactivate(1,'BSEscatt')
 #endif
@@ -150,6 +145,8 @@ subroutine INIT_activate()
  !
  if (l_rim) call initactivate(1,'RandQpts RandGvec QpgFull Em1Anys IDEm1Ref')
  !
+ if (l_rim_w) call initactivate(1,'RandQpts RandGvecW rimw_type Dirac_v_f rimw_check')
+ !
  !Col CUTOFF 
  !
  if (l_col_cut) call initactivate(1,'CUTGeo CUTBox CUTRadius CUTCylLen CUTwsGvec CUTCol_test')
@@ -160,7 +157,7 @@ subroutine INIT_activate()
  !
  ! Kernels
  !
- if (l_em1s.or.l_em1d.or.l_X)      call initactivate(1,'Chimod ChiLinAlgMod')
+ if (l_em1s.or.l_em1d.or.l_X.or.l_mpa)      call initactivate(1,'Chimod ChiLinAlgMod')
  if (l_optics.and.l_chi)           call initactivate(1,'Chimod ChiLinAlgMod')
  if (l_optics.and.l_bse)           call initactivate(1,'BSKmod BSEmod Lkind')
  if (l_optics.and.l_bse.and.l_bss) call initactivate(1,'BSSmod')
@@ -179,7 +176,7 @@ subroutine INIT_activate()
    if(l_bs_fxc) call initactivate(1,'FxcGRLc FxcSVdig FxcRetarded')
    !
    ! ALDA/LRC Tddft
-   if (l_alda_fxc) call initactivate(1,'FxcGRLc UseNLCC')
+   if (l_alda_fxc) call initactivate(1,'FxcGRLc FxcLibxc FxcMode UseNLCC')
    if (l_lrc_fxc)  call initactivate(1,'LRC_alpha LRC_beta')
    if (l_pf_fxc)   call initactivate(1,'PF_alpha')
    !
@@ -187,7 +184,7 @@ subroutine INIT_activate()
  !
  ! Optics(not bse) or GW (no PP)
  !
- if ((l_optics.and.l_chi).or.(l_em1d.and..not.l_life.and..not.l_ppa.and..not.l_gw0).or.l_X) then
+ if ((l_optics.and.l_chi).or.(l_em1d.and..not.(l_life.or.l_ppa.or.l_mpa.or.l_gw0)).or.l_X) then
    !
    X_kind         ="Xd"
    if (l_X) X_kind="Xx"
@@ -217,7 +214,7 @@ subroutine INIT_activate()
    !
    ! Dipoles & Gauges
    !
-   call initactivate(1,'DipApproach DipComputed DipPDirect ShiftedPaths Gauge AnHall')
+   call initactivate(1,'DipApproach DipComputed DipPDirect ShiftedPaths Gauge')
    !
  endif
  !
@@ -226,11 +223,12 @@ subroutine INIT_activate()
  if (l_optics.and.l_bse) then
    !                     
    call initactivate(1,'BSENGexx ALLGexx')
+   call initactivate(1,'Qdirection QShiftOrder')
    !
    if(l_td_hf.or.l_td_sex) call initactivate(1,'BSENGBlk')
    if(l_td_sex)            call initactivate(1,'WehDiag WehCpl')
    if(l_alda_fxc) then
-     call initactivate(1,'BSENGfxc')
+     call initactivate(1,'BSENGfxc FxcLibxc FxcMode UseNLCC')
      if( (WF_exx_fraction>0.) .or. (WF_exx_screening>0.) ) call initactivate(1,'BSENGBlk WehDiag WehCpl')
    endif
    !
@@ -238,7 +236,8 @@ subroutine INIT_activate()
    ! Special case: The BSE equation is used to build up the BSE_Fxc kernel.
    if (l_bs_fxc) then
      call initactivate(1,'FxcGRLc FxcSVdig FxcRetarded FxcMEStps')
-     call initactivate(1,'BLongDir BEnRange BDmRange BEnSteps')
+     call initactivate(1,'BLongDir QPropDir BEnRange BDmRange BEnSteps')
+     !call initactivate(1,'EFieldDir QPropDir BEnRange BDmRange BEnSteps')
    endif
    !
  endif
@@ -254,7 +253,7 @@ subroutine INIT_activate()
    call INIT_RT_ctl_switch('R')
 #endif
    !
-   call initactivate(1,'NoCondSumRule MetDamp AnHall')
+   call initactivate(1,'NoCondSumRule MetDamp')
    !
 #if defined _NL || defined _SC
    call initactivate(1,'EvPolarization FrSndOrd')
@@ -276,7 +275,8 @@ subroutine INIT_activate()
  !
  if (l_optics.and.l_bse.and.l_bss.or.(l_bse.and.l_rpa_IP)) then
    !
-   call initactivate(1,'BEnRange BDmRange BDmERef BEnSteps BLongDir')
+   call initactivate(1,'BEnRange BDmRange BDmERef BEnSteps BLongDir QPropDir')
+   !call initactivate(1,'BEnRange BDmRange BDmERef BEnSteps EFieldDir QPropDir')
    call initactivate(1,'BSEprop BSEdips')
    !
    ! Special case: the BSE_Fxc kernel has been constructed
@@ -286,11 +286,19 @@ subroutine INIT_activate()
    if (index(BSS_mode,'t')/=0 .and. l_bs_fxc) call initactivate(-1,'BSENGBlk BSENGfxc')
    !
    if (index(BSS_mode,'i')/=0)  call initactivate(1,'BSSInvMode BSEPSInvTrs BSSInvPFratio BSSInvKdiag')
-   if (index(BSS_mode,'d')/=0.or.index(BSS_mode,'s')/=0)  call initactivate(1,'WRbsWF BSSPertWidth')
+   if (index(BSS_mode,'d')/=0.or.index(BSS_mode,'s')/=0.or.index(BSS_mode,'o')/=0)  call initactivate(1,'WRbsWF BSSPertWidth')
+   if (index(BSS_mode,'d')/=0)  call initactivate(1,'BSSydiaLib BSSNEig BSSEnRange BSSFirstEig')
    if (index(BSS_mode,'h')/=0)  call initactivate(1,'BSHayTrs BSHayTer BSHayItrIO BSHayItrMAX')
    if (index(BSS_mode,'s')/=0)  then
      call initactivate(1,'BSSNEig BSSEnTarget BSSSlepcApproach BSSSlepcPrecondition BSSSlepcExtraction')
-     call initactivate(1,'BSSSlepcMaxIt BSSSlepcNCV BSSSlepcTol BSSSlepcMatrix')
+     call initactivate(1,'BSSSlepcMaxIt BSSSlepcNCV BSSSlepcMPD BSSSlepcTol BSSSlepcMatrixFormat')
+   endif
+   !
+   if (index(BSS_mode,'x')/=0) then
+        call initactivate(1,'WRbsWF BSSPertWidth BSSNEig')
+   endif
+   if (index(BSS_mode,'c')/=0) then
+        call initactivate(1,'WRbsWF BSSPertWidth BSSNEig')
    endif
    !
    ! Special project dependent variables
@@ -316,11 +324,11 @@ subroutine INIT_activate()
    call initactivate(1,'XTermEn')
  endif
  !
- ! GW (PPA & COHSEX) 
+ ! GW (PPA, MPA, & COHSEX) 
  !
- if ( (l_em1d.and.l_ppa) .or. (l_em1s.and.l_cohsex)) then
+ if ( (l_em1d.and.l_ppa) .or. (l_em1d.and.l_mpa) .or. (l_em1s.and.l_cohsex)) then
    call INIT_QP_ctl_switch('X')
-   call initactivate(1,'RIM_W RIM_W_diag RIM_W_graph')
+   call initactivate(1,'RIM_W RIM_W_diag')
    !
 #if defined _RT
    call INIT_RT_ctl_switch('X')
@@ -330,6 +338,11 @@ subroutine INIT_activate()
    if (l_ppa) then
      call X_activate('Xp',(/'QpntsR','BndsRn','NGsBlk','CGrdSp',&
 &                           'EhEngy','LongDr','PPAPnt'/))
+   endif
+   if (l_mpa) then
+     call X_activate('Xm',(/'QpntsR','BndsRn','NGsBlk','CGrdSp',&
+&                           'EhEngy','LongDr','EnSamp','EnGrid','EnRnge','ImRnge','DmRnge','ETStps','IntSol'/))
+     call initactivate(1,'mpERdb')
    endif
    if (l_cohsex) then
      call X_activate('Xs',(/'QpntsR','BndsRn','NGsBlk','EhEngy','LongDr'/))
@@ -362,11 +375,11 @@ subroutine INIT_activate()
 #if defined _QED
    if (l_elphoton_corr) then
      if (l_gw0) then
-       call initactivate(1,'FFTGvecs RandQpts QEDRLvcs GbndRnge GDamping dScStep DysSolver') 
+       call initactivate(1,'FFTGvecs RandQpts QEDRLvcs GbndRnge GDamping G_mprop dScStep DysSolver')
        if (trim(QP_solver)=="g") then
-         call initactivate(1,'GEnSteps GEnRnge GEnMode GDmRnge GreenFTresh GreenF2QP') 
+         call initactivate(1,'GEnSteps GEnRnge GEnMode GDmRnge GreenFTresh GreenF2QP G_mprop GDamping')
        else
-         call initactivate(1,'GWoIter GWIter SCEtresh')
+         call initactivate(1,'SCEtresh')
          if (.not.l_cohsex) call initactivate(1,'NewtDchk ExtendOut OnMassShell QPExpand')
        endif
      else if (l_life) then
@@ -389,19 +402,21 @@ subroutine INIT_activate()
      !
      if (l_gw0) then
        if (.not.l_cohsex.or.COHSEX_use_empties) call initactivate(1,'GbndRnge') 
-       if (.not.l_cohsex.and.trim(QP_solver)/='g') call initactivate(1,'GDamping') 
+       if (.not.l_cohsex) call initactivate(1,'GDamping G_mprop')
        if (.not.l_cohsex) call initactivate(1,'dScStep') 
        if (.not.l_elphoton_corr) then
-         if (.not.l_ppa.and..not.l_cohsex) &
+         if (.not.l_ppa.and..not.l_mpa.and..not.l_cohsex) &
 &          call X_activate('Xd',(/'BndsRn','NGsBlk',&
 &                          'DmRnge','DmERef','CGrdSp','ETStps','EMStps',&
 &                          'DrudeW','EhEngy','LongDr'/)) 
          if (.not.l_cohsex) call initactivate(1,'GTermKind GTermEn DysSolver')
          if (     l_cohsex) call initactivate(1,'UseEbands')
          if (trim(QP_solver)=="g") then
-           call initactivate(1,'GEnSteps GEnRnge GEnMode GDmRnge GreenFTresh GreenF2QP') 
+           !DALV: switching off GsampType and GImRnge for now
+           !call initactivate(1,'GsampType GEnSteps GEnRnge GImRnge GEnMode GDmRnge GreenFTresh GreenF2QP') 
+           call initactivate(1,'GEnSteps GEnRnge GEnMode GDmRnge GreenFTresh GreenF2QP')
          else
-           call initactivate(1,'GWoIter GWIter SCEtresh')
+           call initactivate(1,'SCEtresh')
            if (.not.l_cohsex) call initactivate(1,'NewtDchk ExtendOut OnMassShell QPExpand')
          endif
        endif
@@ -414,19 +429,10 @@ subroutine INIT_activate()
      endif
    endif
    !
-#if defined  _PHEL 
-   !
-   if (l_phel_corr) then
-     call initactivate(1,'ElecTemp BoseTemp PH_SE_mode GphBRnge GDamping PHELQpts ElPhModes PHDbGdsize DbGdQsize GDamping')
-     call initactivate(1,'ExtendOut OnMassShell')
-     if (      l_gw0) call initactivate(1,'DysSolver GEnSteps GEnRnge PHEL_QPH_En')
-     if (.not. l_gw0) call initactivate(1,'GDamping PHELTrans') 
-   endif
-   !
-#endif
 #if defined  _ELPH 
    !
    if (l_elph_corr) then
+     call INIT_QP_ctl_switch('G')
      call initactivate(1,'DysSolver')
      call initactivate(1,'GphBRnge FANdEtresh DWdEtresh ElPhModes GDamping dScStep ExtendOut ElPhRndNq RandQpts')
      call initactivate(1,'GkkpDB WRgFsq NewtDchk OnMassShell')
@@ -440,8 +446,8 @@ subroutine INIT_activate()
    !
  endif
  !
- if(l_alda_fxc.and.any((/l_em1s,l_em1d,l_acfdt,l_ppa,l_cohsex,l_gw0/)) ) call initactivate(1,'FxcGRLc')
- if( l_lrc_fxc.and.any((/l_em1s,l_em1d,l_acfdt,l_ppa,l_cohsex,l_gw0/)) ) call initactivate(1,'LRC_alpha LRC_beta')
+ if(l_alda_fxc.and.any((/l_em1s,l_em1d,l_acfdt,l_ppa,l_mpa,l_cohsex,l_gw0/)) ) call initactivate(1,'FxcGRLc')
+ if( l_lrc_fxc.and.any((/l_em1s,l_em1d,l_acfdt,l_ppa,l_mpa,l_cohsex,l_gw0/)) ) call initactivate(1,'LRC_alpha LRC_beta')
  !
  ! El-Ph: Frohlich Hamiltonian
  !
@@ -472,8 +478,8 @@ subroutine INIT_activate()
    call initactivate(-1,'QpntsRXs')
    !
    if( index(H_potential,"IP")>0 )  call initactivate(1,'HARRLvcs ALLGHAR')
-   if( index(H_potential,"HARTREE")>0 .or. index(H_potential,"DEFAULT")>0)  call initactivate(1,'HARRLvcs ALLGHAR')
-   if( index(H_potential,"GS_XC")>0   .or. index(H_potential,"DEFAULT")>0 ) call initactivate(1,'VXCRLvcs UseNLCC')
+   if( index(H_potential,"HARTREE")>0 .or. index(H_potential,"DEFAULT")>0 )  call initactivate(1,'HARRLvcs ALLGHAR')
+   if( index(H_potential,"GS_XC")>0   .or. index(H_potential,"DEFAULT")>0 ) call initactivate(1,'VXCRLvcs UseNLCC FxcLibxc')
    !
    if (l_eval_collisions) then
      if( STRING_match(trim(H_potential),"SEX").or.&
@@ -512,6 +518,11 @@ subroutine INIT_activate()
  !
 #if defined _RT
  !
+ ! AM March 2024: the following line has been added in order to perform
+ ! e-p calculations on top of RT carriers distribution.
+ !
+ if (l_elph_corr) call INIT_RT_ctl_switch('G')
+ !
  if (l_real_time) then
    !
    call INIT_QP_ctl_switch('G')
@@ -547,9 +558,10 @@ subroutine INIT_activate()
 #if defined _NL
  if (l_nl_optics) then
    call initactivate(1,'FFTGvecs NLBands NLverbosity NLstep NLtime NLintegrator NLCorrelation NLLrcAlpha')
-   if(.not.l_nl_p_and_p) call initactivate(1,'NLEnRange NLEnSteps')
-   call initactivate(1,'NLDamping RADLifeTime UseDipoles FrSndOrd EvalCurrent InducedField FrPolPerdic') 
-   call initactivate(1,'Gauge RADLifeTime HARRLvcs EXXRLvcs') 
+   call initactivate(1,'TestOSCLL UseSymm')
+   if(.not.l_nl_p_and_p) call initactivate(1,'NLEnRange NLEnSteps NLrotaxis NLAngSteps NLMaxAng')
+   call initactivate(1,'NLDamping RADLifeTime UseDipoles FrSndOrd NoComprCOLL COLLCut EvalCurrent InducedField') 
+   call initactivate(1,'FrPolPerdic TestOSCLL Gauge RADLifeTime HARRLvcs EXXRLvcs CORRLvcs') 
    call init_QP_ctl_switch('G')
  endif
  !

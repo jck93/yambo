@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2019 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine Dipole_spin_magnetization(Xen,Xk,dip)
  !
@@ -29,6 +13,7 @@ subroutine Dipole_spin_magnetization(Xen,Xk,dip)
  use drivers,             ONLY:l_sc_run
  use interfaces,          ONLY:WF_load,WF_free
  use LIVE_t,              ONLY:live_timing
+ use timing_m,            ONLY:timing
  use electrons,           ONLY:levels,n_spinor,n_sp_pol,n_spin
  use R_lattice,           ONLY:bz_samp
  use DIPOLES,             ONLY:DIP_spin,DIPOLE_t
@@ -47,10 +32,12 @@ subroutine Dipole_spin_magnetization(Xen,Xk,dip)
  !
  ! Work Space
  !
- integer                      :: ik,ic_wf(n_sp_pol),iv_wf(n_sp_pol),ic,iv,n_LT_steps,ik_mem,&
-&                                i_sp_wf(2)
+ integer                      :: ik,ic_wf(n_sp_pol),iv_wf(n_sp_pol),ic,iv,n_LT_steps,ik_mem
+ logical                      :: LT_msg=.FALSE.
  !
- if(n_spin==1) return
+ if (n_spin==1) return
+ !
+ call timing("DIPOLE_spin_M",OPR="start")
  !
  ! Parallelization Mask 
  !======================
@@ -59,8 +46,6 @@ subroutine Dipole_spin_magnetization(Xen,Xk,dip)
  n_LT_steps=PAR_IND_DIPk_ibz%n_of_elements(PAR_IND_DIPk_ibz_ID+1)*&
 &           PAR_IND_VAL_BANDS_DIP%n_of_elements(PAR_IND_VAL_BANDS_DIP_ID+1)*&
 &           PAR_IND_CON_BANDS_DIP%n_of_elements(PAR_IND_CON_BANDS_DIP_ID+1)
- !
- if (n_LT_steps>0) call live_timing('Dipoles: spin',n_LT_steps)
  !
  ! Main loop over k in IBZ
  !
@@ -74,6 +59,11 @@ subroutine Dipole_spin_magnetization(Xen,Xk,dip)
    !
    call WF_load(WF,0,1,Dip%ib,(/ik,ik/),space='R',title='-Spin oscillators/R space',&
 &               force_WFo=l_sc_run,keep_states_to_load=.TRUE.)
+   !
+   if (.not.LT_msg) then
+     if (n_LT_steps>0) call live_timing('Spin magnetiziation',n_LT_steps)
+     LT_msg=.TRUE.
+   endif
    !
    do iv=Dip%ib(1),Dip%ib_lim(1) 
      !
@@ -138,5 +128,7 @@ subroutine Dipole_spin_magnetization(Xen,Xk,dip)
  enddo        ! k-points loop
  !
  call live_timing()
+ !
+ call timing("DIPOLE_spin_M",OPR="stop")
  !
 end subroutine Dipole_spin_magnetization

@@ -1,42 +1,26 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM, DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2006 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AM DS
 !
 integer function io_DIPOLES(Dip,ID)
  !
  use pars,          ONLY:schlen,SP
- use DIPOLES,       ONLY:DIPOLE_t,DIP_iR,DIP_P,DIP_v,DIP_alloc
+ use DIPOLES,       ONLY:DIPOLE_t,DIP_iR,DIP_P,DIP_v,DIP_spin,DIP_orbital,P_square
+#if defined _RT
+ use DIPOLES,       ONLY:DIP_P_spinor
+#endif
  use electrons,     ONLY:n_spin,n_sp_pol
  use R_lattice,     ONLY:nXkibz
  use IO_m,          ONLY:io_sec,frag_DIP,io_DIP,read_is_on,io_extension,IO_NOT_ALLOWED, &
 &                        nf90_sync,io_unit,netcdf_call,io_PAR_cpu
  use IO_int,        ONLY:io_connect,io_disconnect,io_variable_bulk,def_variable_bulk,io_header
- use DIPOLES,       ONLY:DIP_spin,DIP_orbital, compute_Orb_dipoles,compute_Spin_dipoles
+ use DIPOLES,       ONLY:DIP_spin,DIP_orbital
  use electrons,     ONLY:n_spinor
-#if defined _RT
- use DIPOLES,       ONLY:DIP_P_spinor
-#endif
- use DIPOLES,       ONLY:P_square,compute_P2_dipoles
  use BS,            ONLY:l_BS_dichroism
+ use stderr,        ONLY:STRING_match
  use parallel_m,    ONLY:PAR_K_scheme
  use timing_m,      ONLY:timing
  !
@@ -120,25 +104,7 @@ integer function io_DIPOLES(Dip,ID)
  P2_size(2:5)=DIP_size(3:6)
  P2_ipos(2:5)=DIP_ipos(3:6)
  !
- if (read_is_on(ID).and.i_fragment==-1) then
-   call DIP_alloc('DIP_iR',(/3,Dip%ib_lim(2),Dip%ib(2),Dip%ib(1),Dip%ib_lim(1),PAR_K_scheme%nibz/))
-   call DIP_alloc('DIP_P' ,(/3,Dip%ib_lim(2),Dip%ib(2),Dip%ib(1),Dip%ib_lim(1),PAR_K_scheme%nibz/))
-   call DIP_alloc('DIP_v' ,(/3,Dip%ib_lim(2),Dip%ib(2),Dip%ib(1),Dip%ib_lim(1),PAR_K_scheme%nibz/))
-   !
-   if (compute_Orb_dipoles) &
-   & call DIP_alloc('DIP_orbital',(/3,Dip%ib_lim(2),Dip%ib(2),Dip%ib(1),Dip%ib_lim(1),PAR_K_scheme%nibz,2/))
-   if (compute_Spin_dipoles) &
-   & call DIP_alloc('DIP_spin',(/3,Dip%ib_lim(2),Dip%ib(2),Dip%ib(1),Dip%ib_lim(1),PAR_K_scheme%nibz/))
-#if defined _RT
-   if (compute_Spin_dipoles.and.n_spinor==2) &
-   & call DIP_alloc('DIP_P_spinor',(/3,Dip%ib_lim(2),Dip%ib(2),Dip%ib(1),Dip%ib_lim(1),PAR_K_scheme%nibz/))
-#endif
-   if (compute_P2_dipoles)  call DIP_alloc('P_square',(/Dip%ib_lim(2),Dip%ib(2),Dip%ib(1),Dip%ib_lim(1),PAR_K_scheme%nibz/))
-   if(l_BS_dichroism) then
-     call DIP_alloc('DIP_orbital',(/3,Dip%ib_lim(2),Dip%ib(2),Dip%ib(1),Dip%ib_lim(1),PAR_K_scheme%nibz,1/))
-   endif
-   !
- endif
+ if (read_is_on(ID)) call DIPOLE_ALLOC_global(Dip,PAR_K_scheme%nibz)
  !
  ! iR
  !
@@ -161,7 +127,7 @@ integer function io_DIPOLES(Dip,ID)
  if (i_fragment< 1) call def_variable_bulk(ID,trim(VAR_name),VAR_ID,DIP_size,SP,par_io_kind='independent')
  if (i_fragment>=1) call  io_variable_bulk(ID,VAR_ID,C5=DIP_v(:,:,:,ik_mem:ik_mem,i_sp_pol:i_sp_pol),IPOS=DIP_ipos)
  !
- if (compute_Orb_dipoles) then
+ if (STRING_match(Dip%computed,"M_it")) then
    !
    ! Itinerant magnetization
    !
@@ -169,6 +135,9 @@ integer function io_DIPOLES(Dip,ID)
    VAr_name='DIP_itinerant'
    if (i_fragment< 1) call def_variable_bulk(ID,trim(VAR_name),VAR_ID,DIP_size,SP,par_io_kind='independent')
    if (i_fragment>=1) call  io_variable_bulk(ID,VAR_ID,C5=DIP_orbital(:,:,:,ik_mem:ik_mem,i_sp_pol:i_sp_pol,2),IPOS=DIP_ipos)
+ endif
+ !
+ if (STRING_match(Dip%computed,"M_orb")) then
    !
    ! Orbital magnetization
    !
@@ -179,7 +148,7 @@ integer function io_DIPOLES(Dip,ID)
    !
  endif
  !
- if (compute_Spin_dipoles) then
+ if (STRING_match(Dip%computed,"M_spin")) then
    !
    ! Spin magntization
    !
@@ -191,7 +160,7 @@ integer function io_DIPOLES(Dip,ID)
  endif
  !
 #if defined _RT
- if (compute_Spin_dipoles.and.n_spinor==2) then
+ if (STRING_match(Dip%computed,"P_spinor")) then
    !
    ! P_Spinor
    !
@@ -203,7 +172,7 @@ integer function io_DIPOLES(Dip,ID)
  endif
 #endif
  !
- if (compute_P2_dipoles) then
+ if (STRING_match(Dip%computed,"P2")) then
    !
    ! P2
    !
@@ -214,7 +183,7 @@ integer function io_DIPOLES(Dip,ID)
    !
  endif
  !
- if (l_BS_dichroism) then
+ if (STRING_match(Dip%computed,"M_CD_orb")) then
    !
    ! Orbital magnetization
    !

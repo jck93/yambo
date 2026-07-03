@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2019 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine Dipole_orb_magn_forCD(Xen,Xk,Dip)
  !
@@ -35,6 +19,7 @@ subroutine Dipole_orb_magn_forCD(Xen,Xk,Dip)
  use parallel_m,          ONLY:PAR_IND_DIPk_ibz,PAR_DIPk_ibz_index,PAR_IND_DIPk_ibz_ID,&
 &                              PAR_IND_VAL_BANDS_DIP,PAR_IND_VAL_BANDS_DIP_ID,&
 &                              PAR_IND_CON_BANDS_DIP,PAR_IND_CON_BANDS_DIP_ID
+ use timing_m,            ONLY:timing
  !
  implicit none
  !
@@ -47,11 +32,13 @@ subroutine Dipole_orb_magn_forCD(Xen,Xk,Dip)
  integer                      :: ik,ic,iv,ib,i_sp_pol,n_LT_steps,ik_mem
  complex(SP)                  :: DIP_x_loc(3),DIP_v_loc(3)
  !
+ call timing("DIPOLE_orbital_M_CD",OPR="start")
+ !
  n_LT_steps=n_sp_pol*PAR_IND_DIPk_ibz%n_of_elements(PAR_IND_DIPk_ibz_ID+1)*&
 &                    PAR_IND_VAL_BANDS_DIP%n_of_elements(PAR_IND_VAL_BANDS_DIP_ID+1)*&
 &                    PAR_IND_CON_BANDS_DIP%n_of_elements(PAR_IND_CON_BANDS_DIP_ID+1)
  !
- if (n_LT_steps>0) call live_timing('Dipoles: orbital magnetization',n_LT_steps)
+ if (n_LT_steps>0) call live_timing('Orbital magnetization (CD)',n_LT_steps)
  !
  ! Main loop over k in IBZ
  !
@@ -79,8 +66,8 @@ subroutine Dipole_orb_magn_forCD(Xen,Xk,Dip)
            
            DIP_v_loc(:)=DIP_v(:,ic,ib,ik_mem,i_sp_pol)
            !
-           DIP_orbital(:,ic,iv,ik_mem,i_sp_pol,1)=DIP_orbital(:,ic,iv,ik_mem,i_sp_pol,1)+ &
-           & cross_product(DIP_x_loc,DIP_v_loc)
+           DIP_orbital(:,ic,iv,ik_mem,i_sp_pol,1)=&
+&                     DIP_orbital(:,ic,iv,ik_mem,i_sp_pol,1)+cross_product(DIP_x_loc,DIP_v_loc)
            !
            ! DEBUG <
            !write(*,*) "[DIP] writing DIP_orbital(..,ic,iv,ik,,) values"
@@ -98,5 +85,7 @@ subroutine Dipole_orb_magn_forCD(Xen,Xk,Dip)
  enddo          ! k-points
  !
  call live_timing()
+ !
+ call timing("DIPOLE_orbital_M_CD",OPR="stop")
  !
 end subroutine Dipole_orb_magn_forCD

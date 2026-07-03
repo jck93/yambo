@@ -1,44 +1,29 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2021 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): DS AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
-!
-subroutine K_IP_sort(what,I,N,El,vC)
+subroutine K_IP_sort(what,I,N,Indexes,vI,El,vC)
  !
  use pars,          ONLY:SP,cZERO
  use parallel_m,    ONLY:PAR_COM_eh_INDEX,PAR_COM_Xk_ibz_INDEX
- use X_m,           ONLY:BS_E_sorted,N_BS_E_sorted
- use BS,            ONLY:BS_H_dim
+ use X_m,           ONLY:BS_E_sorted,N_BS_E_sorted,BS_E_sorted_indx
+ use BS,            ONLY:BS_H_dim,l_BS_esort_indx
  use vec_operate,   ONLY:sort,degeneration_finder
  use units,         ONLY:HA2EV
  use parallel_int,  ONLY:PP_redux_wait
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  character(*)  ::what
- integer       ::I,N
+ integer       ::I,N,Indexes(5),vI(BS_H_dim,5)
  complex(SP)   ::El,vC(BS_H_dim,N_BS_E_sorted)
  !
  ! Work space
  !
+ logical                  :: l_print_warning
  integer                  :: EDIM,Ntmp,i_VAR,i_cv,i_grp,n_deg_grp
  real(SP),    allocatable :: vR(:)
  integer,     allocatable :: sort_indx(:),first_el(:),n_of_el(:)
@@ -46,11 +31,15 @@ subroutine K_IP_sort(what,I,N,El,vC)
  if (what=="add") then
    N=N+1
    vC(I,N)=El
+   if(N==1) vI(I,:)=Indexes
    return
  endif
  !
+ !
  call PP_redux_wait(vC,COMM=PAR_COM_Xk_ibz_INDEX%COMM )
+ call PP_redux_wait(vI,COMM=PAR_COM_Xk_ibz_INDEX%COMM )
  call PP_redux_wait(vC,COMM=PAR_COM_eh_INDEX%COMM )
+ call PP_redux_wait(vI,COMM=PAR_COM_eh_INDEX%COMM )
  !
  YAMBO_ALLOC(vR,(BS_H_dim)) 
  YAMBO_ALLOC(sort_indx,(BS_H_dim))
@@ -68,20 +57,34 @@ subroutine K_IP_sort(what,I,N,El,vC)
  ! Threshold is 1meV
  call degeneration_finder(vR(:EDIM),EDIM,first_el,n_of_el,n_deg_grp,0.001_SP/HA2EV,Include_single_values=.TRUE.)
  !
+ l_print_warning=.false.
+ !
  do i_VAR=1,n_BS_E_sorted
    BS_E_sorted(:,i_VAR,1)=cZERO
    do i_grp=1,n_deg_grp
      if(i_grp>EDIM/Ntmp) cycle
+     !
+     if(i_VAR==1.and.l_BS_esort_indx) then
+       if (n_of_el(i_grp)>18) l_print_warning=.true.
+       do i_cv=first_el(i_grp),first_el(i_grp)+min(18,n_of_el(i_grp))-1
+         BS_E_sorted_indx(i_grp,i_cv-first_el(i_grp)+1,1:5)=vI(sort_indx(i_cv),:)
+       enddo
+     endif
+     !
      if(i_VAR==2) then
        BS_E_sorted(i_grp,i_VAR,1)=real(n_of_el(i_grp),SP)
        cycle
      endif
+     !
      do i_cv=first_el(i_grp),first_el(i_grp)+n_of_el(i_grp)-1
        BS_E_sorted(i_grp,i_VAR,1)=BS_E_sorted(i_grp,i_VAR,1)+vC(sort_indx(i_cv),i_VAR)
      enddo
-     BS_E_sorted(i_grp,i_VAR,1)=BS_E_sorted(i_grp,i_VAR,1)/real(n_of_el(i_grp),SP)
+     if(i_VAR==1) BS_E_sorted(i_grp,i_VAR,1)=BS_E_sorted(i_grp,i_VAR,1)/real(n_of_el(i_grp),SP)
    enddo
+   !
  enddo
+ !
+ if (l_print_warning) call warning("More than 18 degenerate transitions detected. Printing only first 18")
  !
  ! Free
  deallocate(first_el) 

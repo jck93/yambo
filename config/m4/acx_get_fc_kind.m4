@@ -1,25 +1,9 @@
 #
-#        Copyright (C) 2000-2022 the YAMBO team
-#              http://www.yambo-code.org
+# License-Identifier: GPL
+#
+# Copyright (C) 2007 The Yambo Team
 #
 # Authors (see AUTHORS file for details): AM
-#
-# This file is distributed under the terms of the GNU
-# General Public License. You can redistribute it and/or
-# modify it under the terms of the GNU General Public
-# License as published by the Free Software Foundation;
-# either version 2, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will
-# be useful, but WITHOUT ANY WARRANTY; without even the
-# implied warranty of MERCHANTABILITY or FITNESS FOR A
-# PARTICULAR PURPOSE.  See the GNU General Public License
-# for more details.
-#
-# You should have received a copy of the GNU General Public
-# License along with this program; if not, write to the Free
-# Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-# MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 #
 AC_DEFUN([ACX_GET_FC_KIND],
 [
@@ -27,6 +11,7 @@ INTELVERSION="unknown"
 FCKIND="unknown"
 case "${FC}" in
     *ftn*)
+      FCKIND="cray"
       FCVERSION=`$FC --version`
       ;;
     *abf90*)
@@ -51,7 +36,7 @@ case "${FC}" in
       FCKIND="intel"
       FCVERSION=`$FC -v 2>&1`
       ;;
-    *ifort*)
+    *ifort* | *ifx* )
       FCKIND="intel"
       FCVERSION=`$FC -v 2>&1`
       $FC -v >& ver_
@@ -68,6 +53,10 @@ case "${FC}" in
       VER_18=`grep 18. ver_ | wc -l`
       VER_19=`grep 19. ver_ | wc -l`
       VER_2021=`grep 2021. ver_ | wc -l`
+      VER_2022=`grep 2022. ver_ | wc -l`
+      VER_2023=`grep 2023. ver_ | wc -l`
+      VER_2024=`grep 2024. ver_ | wc -l`
+      VER_2025=`grep 2025. ver_ | wc -l`
       if ! test "$VER_8" = "0";  then INTELVERSION="8"  ; fi
       if ! test "$VER_9" = "0";  then INTELVERSION="9"  ; fi
       if ! test "$VER_10" = "0"; then INTELVERSION="10" ; fi
@@ -81,6 +70,10 @@ case "${FC}" in
       if ! test "$VER_18" = "0"; then INTELVERSION="18" ; fi
       if ! test "$VER_19" = "0"; then INTELVERSION="19" ; fi
       if ! test "$VER_2021" = "0"; then INTELVERSION="2021" ; fi
+      if ! test "$VER_2022" = "0"; then INTELVERSION="2022" ; fi
+      if ! test "$VER_2023" = "0"; then INTELVERSION="2023" ; fi
+      if ! test "$VER_2024" = "0"; then INTELVERSION="2024" ; fi
+      if ! test "$VER_2025" = "0"; then INTELVERSION="2025" ; fi
       rm -f ver_
       ;;
     *)

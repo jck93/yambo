@@ -1,27 +1,11 @@
 #
-#        Copyright (C) 2000-2019 the YAMBO team
-#              http://www.yambo-code.org
+# License-Identifier: GPL
 #
-# Authors (see AUTHORS file for details): AM, DS
+# Copyright (C) 2016 The Yambo Team
 #
-# This file is distributed under the terms of the GNU
-# General Public License. You can redistribute it and/or
-# modify it under the terms of the GNU General Public
-# License as published by the Free Software Foundation;
-# either version 2, or (at your option) any later version.
+# Authors (see AUTHORS file for details): AM DS
 #
-# This program is distributed in the hope that it will
-# be useful, but WITHOUT ANY WARRANTY; without even the
-# implied warranty of MERCHANTABILITY or FITNESS FOR A
-# PARTICULAR PURPOSE.  See the GNU General Public License
-# for more details.
-#
-# You should have received a copy of the GNU General Public
-# License along with this program; if not, write to the Free
-# Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-# MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
-#
-m4_include([config/version/version.m4])
+m4_include([include/version/version.m4])
 #
 CURRENT_DIR=`echo "$PWD" | sed -e "s/ /X/g"`
 if ! test -d $CURRENT_DIR ; then 
@@ -41,7 +25,7 @@ AC_CONFIG_SRCDIR([driver/yambo.F])
 #
 m4_include([config/m4/yambo_remote_compilation_setup.m4])
 m4_include([config/m4/yambo_specific.m4])
-m4_include([config/m4/yambo_libraries.m4])
+m4_include([config/m4/yambo_diago.m4])
 # 
 #  General
 #
@@ -50,21 +34,27 @@ m4_include([config/m4/acx_misc.m4])
 m4_include([config/m4/acx_gmake.m4])
 m4_include([config/m4/acx_cpp.m4])
 m4_include([config/m4/acx_fpp.m4])
-m4_include([config/m4/ax_f90_module_flag.m4])
 m4_include([config/m4/acx_get_fc_kind.m4])
 m4_include([config/m4/acx_get_mpi_kind.m4])
 m4_include([config/m4/acx_fortran_flags.m4])
 m4_include([config/m4/acx_mpi.m4])
-m4_include([config/m4/cuda.m4])
+m4_include([config/m4/acx_version.m4])
 m4_include([config/m4/acx_branch.m4])
 m4_include([config/m4/acx_IO_wrap_up.m4])
+#
+m4_include([config/m4/ax_f90_module_flag.m4])
+m4_include([config/m4/ax_check_compile_flag.m4])
+#
+m4_include([config/m4/gpu.m4])
 # 
 #  Report
 #
+m4_include([config/m4/acx_stripe_subpath.m4])
 m4_include([config/m4/acx_report.m4])
 # ============================================================================
-# Echo
-AC_PROG_ECHO
+# version.m4 -> version.h
+ACX_VERSION
+#
 # ============================================================================
 # Current branch
 ACX_BRANCH
@@ -77,7 +67,6 @@ AC_C_CONST
 AC_C_INLINE
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
-# AC_FUNC_SETVBUF_REVERSE # This is reported as obsolete
 AC_FUNC_STAT
 AC_PROG_MAKE_SET
 # ============================================================================
@@ -164,6 +153,25 @@ FCFLAGS="$acx_save_fcflags $F90EXTFLAGS"
 #
 # ============================================================================
 #
+# GPUs suppport
+#
+GPU_SUPPORT="no_gpu"
+#
+AC_ARG_ENABLE(cuda_fortran,[AS_HELP_STRING([--enable-cuda-fortran],[Enable CUDA support @<:@default=no@:>@])],[],[enable_cuda_fortran="no"])
+AC_ARG_ENABLE(openacc,[AS_HELP_STRING([--enable-openacc],[Enable OPENACC support @<:@default=no@:>@])],[],[enable_openacc="no"])
+AC_ARG_ENABLE(openmp5,[AS_HELP_STRING([--enable-openmp5],[Enable OPENMP5 support @<:@default=no@:>@])],[],[enable_openmp5="no"])
+#
+if test x"$enable_cuda_fortran" != "xno" ; then GPU_SUPPORT="cudaf"   ; fi
+if test x"$enable_openacc" != "xno"      ; then GPU_SUPPORT="openacc" ; enable_open_mp="no";  fi
+if test x"$enable_openmp5" != "xno"      ; then GPU_SUPPORT="openmp5" ; fi
+#
+AC_SUBST(enable_cuda_fortran)
+AC_SUBST(enable_openacc)
+AC_SUBST(enable_openmp5)
+AC_SUBST(GPU_SUPPORT)
+#
+# ============================================================================
+#
 # OpenMP
 #
 AC_ARG_ENABLE(open-mp, AS_HELP_STRING([--enable-open-mp],[Enable OpenMP support]))
@@ -247,11 +255,11 @@ m4_include([config/m4/iotk.m4])
 m4_include([config/m4/etsf_io.m4])
 m4_include([config/m4/scalapack.m4])
 m4_include([config/m4/petsc_slepc.m4])
+m4_include([config/m4/libcuda.m4])
+m4_include([config/m4/chase.m4])
+m4_include([config/m4/device_xlib.m4])
 #
 AC_LANG_PUSH(Fortran)
-# ============================================================================
-# Yambo Libs
-AC_YAMBO_LIBRARIES
 # ============================================================================
 # YDB/YAMBOpy
 ACX_SCRIPTS
@@ -268,6 +276,9 @@ AC_PETSC_SLEPC_SETUP
 # ============================================================================
 # SCALAPACK/BLACS
 AC_SLK_SETUP
+# ============================================================================
+# ChASE
+AC_CHASE_SETUP
 # ============================================================================
 # HDF5 
 AC_HAVE_HDF5_F90
@@ -290,8 +301,17 @@ AC_HAVE_ETSF_IO
 # LIBXC
 ACX_LIBXC
 # ============================================================================
+# CUDA LIBRARY
+ACX_LIBCUDA
+# ============================================================================
 # CUDA
-AC_HAVE_CUDA
+AC_SET_GPU
+# ============================================================================
+# Device XLIB
+ACX_DEVXLIB
+# ============================================================================
+# Yambo Libs
+AC_YDIAGO
 # ============================================================================
 # Prepare the REPORT file variables
 ACX_REPORT()
@@ -304,9 +324,7 @@ AC_CONFIG_FILES([
  config/setup config/mk/global/defs.mk config/report config/msg_ydb
  src/wf_and_fft/sgfft.F src/tools/.objects  
  config/mk/local/defs.mk config/mk/defs.mk sbin/compilation/helper.inc.sh
- include/branch.inc include/driver/editor.h 
- lib/archive/git.list
-])
+ include/branch.inc include/driver/editor.h lib/archive/git.list ])
 #
 AC_OUTPUT
 #

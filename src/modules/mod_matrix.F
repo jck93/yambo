@@ -1,33 +1,18 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2017 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 module matrix
  !
  use pars,       ONLY:schlen,SP
  use parallel_m, ONLY:yMPI_comm
+ use devxlib,    ONLY:devxlib_mapped,devxlib_memset_d
  !
 #include<dev_defs.h>
-#include<memory.h>
+#include<y_memory.h>
  !
  ! Distributed Matrix structure
  !
@@ -82,9 +67,12 @@ module matrix
    !
    subroutine MATRIX_copy(M_in,M_out,ALLOC)
      use pars,          ONLY:cZERO
+     use gpu_m,         ONLY:have_gpu
      type(PAR_matrix)   :: M_in,M_out
      logical            :: ALLOC
      integer            :: NW
+     !
+     !DEV_ACC enter data copyin(M_out)
      M_out%kind       = M_in%kind
      M_out%I          = M_in%I   
      M_out%N          = M_in%N   
@@ -104,16 +92,18 @@ module matrix
      M_out%Nb         = M_in%Nb  
      M_out%INTER_comm = M_in%INTER_comm
      M_out%INTRA_comm = M_in%INTRA_comm
+     !
      if (.not.ALLOC) return
      if (allocated(M_in%blc)) then
        NW=size(M_in%blc,3)
        YAMBO_ALLOC(M_out%blc,(M_out%rows(1):M_out%rows(2),M_out%cols(1):M_out%cols(2),NW))
        M_out%blc=cZERO
      endif
-     if (allocated(M_in%blc_d)) then
-       YAMBO_ALLOC(M_out%blc_d,(M_out%rows(1):M_out%rows(2),M_out%cols(1):M_out%cols(2),NW))
-       M_out%blc_d=cZERO
+     if (have_gpu.and.devxlib_mapped(DEV_VAR(M_in%blc))) then
+       YAMBO_ALLOC_GPU(DEV_VAR(M_out%blc),(M_out%rows(1):M_out%rows(2),M_out%cols(1):M_out%cols(2),NW))
+       call devxlib_memset_d(DEV_VAR(M_out%blc),cZERO)
      endif
+     !
    end subroutine 
    !
    subroutine MATRIX_reset(M_par)
@@ -144,8 +134,10 @@ module matrix
      call COMM_reset(M_par%INTER_comm)
      call COMM_reset(M_par%INTRA_comm)
      !
+     YAMBO_FREE_GPU(DEV_VAR(M_par%blc))
      YAMBO_FREE(M_par%blc)
-     YAMBO_FREE(M_par%blc_d)
+     !
+     !DEV_ACC exit data delete(M_par)
      !
    end subroutine
    !

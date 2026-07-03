@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): HM, DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2022 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): HM DS
 !
 subroutine io_BS_PAR_block(iq,i_block,ID,mode)
  !
@@ -29,11 +13,12 @@ subroutine io_BS_PAR_block(iq,i_block,ID,mode)
  ! For each block only the upper triangular part is written
  ! Each block has a status variables indicating if the matrix element was already calculated
  !
- use pars,          ONLY:IP,IPL,SP,schlen
- use stderr,        ONLY:STRING_remove
- use BS,            ONLY:BS_blk,BSK_IO_mode,MAX_BSK_LIN_size,n_BS_blks_min
+ use pars,          ONLY:IP,IPL,SP,schlen,max_io_vars_open
+ use iso_c_binding, ONLY:C_LOC,C_F_POINTER
+ use stderr,        ONLY:STRING_split
+ use BS,            ONLY:BS_blk,BSK_IO_mode,MAX_BSK_LIN_size,n_BS_blks_min,BS_K_dim,BSK_IO_sum_value
  use timing_m,      ONLY:timing
- use IO_m,          ONLY:io_unit,netcdf_call,nf90_sync,&
+ use IO_m,          ONLY:io_unit,netcdf_call,nf90_sync,variable_exist,io_action,RD,WR,&
 &                        write_is_on,read_is_on,io_BS_K,YAMBO_CMPLX_NO_FILL
  use IO_int,        ONLY:io_variable_bulk
  !
@@ -45,13 +30,15 @@ subroutine io_BS_PAR_block(iq,i_block,ID,mode)
  !
  ! Work Space
  !
- character(schlen)   :: BSK_IO_local
+ integer, parameter :: n_max_tot_vars=6  ! see io_BS_PAR_init
+ !
+ character(schlen)   :: BSK_IO_local,BSK_IO_split(3)
  logical             :: lwrite(3),file_sync
- integer             :: x1,x2,VAR_IDs(2),stat,ID_now(2)
+ integer             :: x1,x2,VAR_IDs(2),ID_table,ID_energ,stat,ID_now(2)
  integer             :: n2,i1,i2,idx1,idx2,imax,i_rep(2),ilast
  integer(IPL)        :: idx
  !
- complex(SP), allocatable :: TMP_IO_VAR(:)
+ complex(SP), allocatable :: TMP_IO_VAR(:),mat_tmp(:,:)
  !
  if( (.not.io_BS_K) .and. trim(mode)=="full") return
  !
@@ -59,6 +46,8 @@ subroutine io_BS_PAR_block(iq,i_block,ID,mode)
  !
  ! Get the type of block that we want to write 
  !
+ ID_table=max_io_vars_open
+ ID_energ=max_io_vars_open-1
  select case(BS_blk(i_block)%mode)
  case("R")
    VAR_IDs=(/1,2/)
@@ -72,8 +61,12 @@ subroutine io_BS_PAR_block(iq,i_block,ID,mode)
  x1=BS_blk(i_block)%coordinate(1)
  x2=BS_blk(i_block)%coordinate(2)
  !
- BSK_IO_local=trim(STRING_remove(BSK_IO_mode,"norestart"))
+ call STRING_split(BSK_IO_mode,BSK_IO_split)
+ BSK_IO_local=BSK_IO_split(1)
  if(index(mode,"compressed")/=0) BSK_IO_local=trim(mode)
+ if(index(mode,"tableonly")/=0)  BSK_IO_local=trim(mode)
+ !
+ if (.not. allocated(BS_blk(i_block)%mat) ) call K_block_alloc(i_block,trim(mode))
  !
  select case(trim(BSK_IO_local))
  case("1D_linear","compressed_head","compressed_mat")
@@ -107,8 +100,8 @@ subroutine io_BS_PAR_block(iq,i_block,ID,mode)
      i_rep(1)=1+int((idx-int(1,IPL))/int(MAX_BSK_LIN_size,IPL),IP)
      ! if idx+imax  > MAX_BSK_LIN_size switch to the next variable
      i_rep(2)=1+int((idx+int(imax-2,IPL))/int(MAX_BSK_LIN_size,IPL),IP)
-     ! I need both the previous two because a block can be written
-     ! part on linear variable, part on the next
+     ! I need both because a block can be written
+     ! part on a variable, part on the next
      !
      idx1= int(idx-int(MAX_BSK_LIN_size,IPL)*int(i_rep(1)-1,IPL),IP)
      !
@@ -132,8 +125,8 @@ subroutine io_BS_PAR_block(iq,i_block,ID,mode)
      !
      if(idx1+int(imax,IPL)-1<=MAX_BSK_LIN_size) then
        ! Block is all in one variable
-       ID_now(1)=VAR_IDs(2)+(i_rep(1)-1)*8
-       ID_now(2)=VAR_IDs(1)+(i_rep(1)-1)*8
+       ID_now(1)=VAR_IDs(2)+(i_rep(1)-1)*n_max_tot_vars
+       ID_now(2)=VAR_IDs(1)+(i_rep(1)-1)*n_max_tot_vars
        if(lwrite(1)) call io_variable_bulk(ID,ID_now(1), CH1=BS_blk(i_block)%done(:imax,i2), IPOS=[  idx1] )
        if(lwrite(2)) call io_variable_bulk(ID,ID_now(2),  C1=BS_blk(i_block)%mat(:imax,i2),  IPOS=[1,idx1] )
        if(lwrite(3)) call io_variable_bulk(ID,ID_now(2),  C1=TMP_IO_VAR,                     IPOS=[1,idx1] )
@@ -141,20 +134,20 @@ subroutine io_BS_PAR_block(iq,i_block,ID,mode)
        ! Block is split
        ilast=MAX_BSK_LIN_size-idx1+1
        if(lwrite(1)) then
-         ID_now(1)=VAR_IDs(2)+(i_rep(1)-1)*8
-         ID_now(2)=VAR_IDs(2)+(i_rep(2)-1)*8
+         ID_now(1)=VAR_IDs(2)+(i_rep(1)-1)*n_max_tot_vars
+         ID_now(2)=VAR_IDs(2)+(i_rep(2)-1)*n_max_tot_vars
          call io_variable_bulk(ID,ID_now(1), CH1=BS_blk(i_block)%done(:ilast,i2),       IPOS=[  idx1] )
          call io_variable_bulk(ID,ID_now(2), CH1=BS_blk(i_block)%done(ilast+1:imax,i2), IPOS=[     1] )
        endif
        if(lwrite(2)) then
-         ID_now(1)=VAR_IDs(1)+(i_rep(1)-1)*8
-         ID_now(2)=VAR_IDs(1)+(i_rep(2)-1)*8
+         ID_now(1)=VAR_IDs(1)+(i_rep(1)-1)*n_max_tot_vars
+         ID_now(2)=VAR_IDs(1)+(i_rep(2)-1)*n_max_tot_vars
          call io_variable_bulk(ID,ID_now(1),  C1=BS_blk(i_block)%mat(:ilast,i2),        IPOS=[1,idx1] )
          call io_variable_bulk(ID,ID_now(2),  C1=BS_blk(i_block)%mat(ilast+1:imax,i2),  IPOS=[1,   1] )
        endif
        if(lwrite(3)) then
-         ID_now(1)=VAR_IDs(1)+(i_rep(1)-1)*8
-         ID_now(2)=VAR_IDs(1)+(i_rep(2)-1)*8
+         ID_now(1)=VAR_IDs(1)+(i_rep(1)-1)*n_max_tot_vars
+         ID_now(2)=VAR_IDs(1)+(i_rep(2)-1)*n_max_tot_vars
          call io_variable_bulk(ID,ID_now(1),  C1=TMP_IO_VAR(:ilast),                    IPOS=[1,idx1] )
          call io_variable_bulk(ID,ID_now(2),  C1=TMP_IO_VAR(ilast+1:imax),              IPOS=[1,   1] )
        endif
@@ -187,8 +180,17 @@ subroutine io_BS_PAR_block(iq,i_block,ID,mode)
    ! 
    ! Write one block at a time in 2D
    !
+   if (BSK_IO_sum_value.and.write_is_on(ID)) then
+     allocate(mat_tmp(BS_blk(i_block)%size(1),BS_blk(i_block)%size(2)))
+     io_action(ID)=RD
+     call io_variable_bulk(ID, VAR_IDs(1),  C2=mat_tmp , IPOS=(/1,x1,x2/) )
+     io_action(ID)=WR
+     BS_blk(i_block)%mat=BS_blk(i_block)%mat+mat_tmp
+     deallocate(mat_tmp)
+   endif
+   !
    call io_variable_bulk(ID, VAR_IDs(1),  C2=BS_blk(i_block)%mat , IPOS=(/1,x1,x2/) )
-   if(read_is_on(ID)) then
+   if(read_is_on(ID) .and. .not.trim(mode)=="matonly") then
      do i2=1,BS_blk(i_block)%size(2)
        do i1=1,BS_blk(i_block)%size(1)
          if(BS_blk(i_block)%mat(i1,i2)==YAMBO_CMPLX_NO_FILL) cycle
@@ -197,7 +199,19 @@ subroutine io_BS_PAR_block(iq,i_block,ID,mode)
      enddo
    endif
    !
+ case("tableonly")
+   !
+   ! Skip I/O of BS_mat
+   !
  end select
+ !
+ if ((x1==x2.or.BS_blk(i_block)%size(2)==BS_K_dim(1)) .and. .not.trim(mode)=="matonly") then
+   if (  write_is_on(ID) .or. variable_exist(ID,"BS_TABLE") ) then
+     if (BS_blk(i_block)%mode=="C" .or. BS_blk(i_block)%mode=="A") x1=x1+BS_K_dim(1)
+     call io_variable_bulk(ID, ID_energ,  R1=BS_blk(i_block)%E,     IPOS=(/x1/) )
+     call io_variable_bulk(ID, ID_table,  I2=BS_blk(i_block)%table, IPOS=(/1,x1/) )
+   endif
+ endif
  !
  ! nf90_sync is performed up to n_BS_blks_min and at steps of 5% of BSE kernel
  file_sync= i_block<=n_BS_blks_min .and. mod(i_block,max(1,n_BS_blks_min/20))==0 .and. index(BSK_IO_mode,"norestart")==0
@@ -206,7 +220,7 @@ subroutine io_BS_PAR_block(iq,i_block,ID,mode)
    stat = nf90_sync(io_unit(ID))
    call netcdf_call(stat,ID)
  endif
- !   
+ !
  call timing('io_BS',OPR='stop')
  !
 end subroutine

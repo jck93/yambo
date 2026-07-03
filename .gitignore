@@ -1,3 +1,6 @@
+jobs/hBN/*
+jobs/Silicon/*
+*/*.mk
 # DEPS #
 ########
 modulesdep.list
@@ -30,18 +33,23 @@ lib/archive/git.list
 *.a
 *.so
 *.mod
-*.dep
+*.smod
+*.modmic
+*modules.dep
+*.save
 *.f90
+*.i
 *.s
-*.sw*
+*.swp*
 *dSYM
 *bk
 
 # source #
 ##########
-lib/archive/yambo-libraries-1.0/
-lib/yambo/driver/yambo/include/editor.h
-lib/yambo/driver/yambo/include/version.h
+lib/archive/Ydriver
+lib/yambo/Ydriver/yambo/include/editor.h
+lib/yambo/Ydriver/yambo/include/version.h
+include/version/version.h
 include/driver/editor.h
 include/branch.inc
 src/tools/.objects
@@ -58,6 +66,7 @@ include/system/*
 lib/install/make_iotk.inc
 lib/iotk/make.sys
 lib/iotk/make_iotk.inc
+lib/ydiago/make_ydiago.inc
 lib/yambo
 lib/*/*stamp
 lib/*/package-installed
@@ -66,17 +75,19 @@ lib/*/bin
 lib/*/tmp
 lib/*/etsf_io*
 lib/*/netcdf-*
-lib/*/pnetcdf-*
 lib/*/iotk*
 lib/*/libxc-*
 lib/*/lapack-*
 lib/*/fftw-*
 lib/*/blacs*
 lib/*/scalapack-*
+lib/*/elpa-*
 lib/*/petsc-*
 lib/*/slepc-*
 lib/*/futile*
 lib/*/yaml*
+lib/*/Ydiago*
+lib/*/devicexlib*
 lib/hdf5/hdf5*
 lib/external/*
 compile.sh
@@ -126,3 +137,8 @@ Thumbs.db
 myconfig*
 nohup.out
 autom4te.cache
+
+#Scripts
+gfortran*.sh
+pgi*.sh
+nvidia*.sh

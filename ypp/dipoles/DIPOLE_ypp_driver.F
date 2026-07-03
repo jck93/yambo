@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2020 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-!
-! This file is distributed under the terms of the GNU
-! General Public License. You can redistribute it and/or
-! modify it under the terms of the GNU General Public
-! License as published by the Free Software Foundation;
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will
-! be useful, but WITHOUT ANY WARRANTY; without even the
-! implied warranty of MERCHANTABILITY or FITNESS FOR A
-! PARTICULAR PURPOSE.  See the GNU General Public License
-! for more details.
-!
-! You should have received a copy of the GNU General Public
-! License along with this program; if not, write to the Free
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine DIPOLE_ypp_driver(k,E,q)
  !
@@ -30,7 +14,8 @@ subroutine DIPOLE_ypp_driver(k,E,q)
  use electrons,      ONLY:levels,n_spin
  use YPPm,           ONLY:DIPs_C_bands,DIPs_V_bands,DIPs_E_range,DIPs_direction,K_transform,coo_out,INTERP_grid,&
 &                         l_PROJECT_plane,l_PROJECT_line,PROJECT_N_par,DIPs,DIPs_mask,DIPs_kind
- use DIPOLES,        ONLY:DIPOLES_reset,DIP_alloc,DIP_iR,DIP_desc
+ use DIPOLES,        ONLY:DIPOLES_reset,DIP_iR,DIP_desc
+ use ALLOC,          ONLY:DIPOLE_ALLOC_global
  use parallel_m,     ONLY:PAR_IND_DIPk_ibz,PAR_IND_CON_BANDS_DIP,PAR_IND_VAL_BANDS_DIP,PAR_DIPk_ibz_index
  use parallel_int,   ONLY:PARALLEL_global_indexes,PP_redux_wait
  use QP_CTL_m,       ONLY:QP_apply
@@ -42,7 +27,7 @@ subroutine DIPOLE_ypp_driver(k,E,q)
  use parser_m,       ONLY:parser
  use interpolate,    ONLY:INTERPOLATION_driver_seed,INTERPOLATION_driver_do,GRID_k,INTERP_obj
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(bz_samp)  :: k,q
  type(levels)   :: E
@@ -216,9 +201,7 @@ subroutine DIPOLE_ypp_driver(k,E,q)
  contains 
    !
    subroutine LOCAL_clean
-    call DIP_alloc('DIP_iR')
-    call DIP_alloc('DIP_P')
-    call DIP_alloc('DIP_v')
+    call DIPOLE_ALLOC_global( )
     call DIPOLES_reset(DIPs)
    end subroutine
    !

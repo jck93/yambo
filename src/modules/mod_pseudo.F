@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM, DS, AF
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2009 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AM DS AF
 !
 module pseudo
  !
@@ -29,7 +13,7 @@ module pseudo
  use D_lattice,   ONLY:n_atomic_species,n_atoms_species
  use qe_pseudo_m, ONLY:qe_pseudo_deallocate, qe_pseudo_allocate,&
 &                      bec_type, deallocate_bec_type
-#include <memory.h>
+#include <y_memory.h>
  !
  ! *** Non-Local pseudo. The [r,Vnl] commutator ***
  !
@@ -135,7 +119,7 @@ module pseudo
      use R_lattice,  ONLY:ng_vec
      implicit none
      YAMBO_ALLOC(pp_rhog_nlcc,(ng_vec))
-     YAMBO_ALLOC(pp_has_nlcc_atom,(n_atomic_species))
+     allocate(pp_has_nlcc_atom(n_atomic_species))
      pp_rhog_nlcc =0.
      pp_has_nlcc_atom =0
    end subroutine 
@@ -143,7 +127,7 @@ module pseudo
    subroutine PP_nlcc_free()
      YAMBO_FREE(pp_rhog_nlcc)
      YAMBO_FREE(pp_rho_nlcc)
-     YAMBO_FREE(pp_has_nlcc_atom)
+     if (allocated(pp_has_nlcc_atom)) deallocate(pp_has_nlcc_atom)
      pp_has_nlcc=.FALSE.
    end subroutine
    !

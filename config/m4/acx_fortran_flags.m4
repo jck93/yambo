@@ -1,25 +1,9 @@
 #
-#        Copyright (C) 2000-2022 the YAMBO team
-#              http://www.yambo-code.org
+# License-Identifier: GPL
+#
+# Copyright (C) 2010 The Yambo Team
 #
 # Authors (see AUTHORS file for details): AM
-#
-# This file is distributed under the terms of the GNU
-# General Public License. You can redistribute it and/or
-# modify it under the terms of the GNU General Public
-# License as published by the Free Software Foundation;
-# either version 2, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will
-# be useful, but WITHOUT ANY WARRANTY; without even the
-# implied warranty of MERCHANTABILITY or FITNESS FOR A
-# PARTICULAR PURPOSE.  See the GNU General Public License
-# for more details.
-#
-# You should have received a copy of the GNU General Public
-# License along with this program; if not, write to the Free
-# Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-# MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 # #
 ################################################
 # Set FC FLAGS
@@ -37,13 +21,20 @@ if test x"$enable_debug_flags" = "x"; then enable_debug_flags="no"; fi
 HDF5_MODE="production";
 #
 def_compiler=
+SLK_FC_FLAGS=""
 #
 case "${host}" in
 i?86*linux*)
   case "${FC}" in
+  *ftn* )
+    SYSFLAGS="-O1 -g -emf -eZ"
+    FUFLAGS="-O0 -g -emf  -eZ"
+    FCMFLAG=""
+    OMPFLAGS="-fopenmp"
+    DEBUG_FLAGS="-g "
+  ;;
   *pgf9* | *ftn* | *pgfortran* )
-    SYSFLAGS="-O2 -g -fast -Munroll -Mnoframe -Mdalign -Mbackslash"
-    #FUFLAGS="-O0 -g -Mbackslash"
+    SYSFLAGS="-O1 -gopt -Mnoframe -Mdalign -Mbackslash -cpp"
     FUFLAGS="-O0 -Mbackslash"
     FCMFLAG="-Mnomain"
     OMPFLAGS="-mp"
@@ -52,7 +43,7 @@ i?86*linux*)
     DEBUG_FLAGS="-g -Minform=inform -Mbounds -Mchkptr -Mchkstk -Meh_frame -Mbackslash"
     ;;
   *nvfortran* )
-    SYSFLAGS="-O2 -g -fast -Munroll -Mnoframe -Mdalign -Mbackslash"
+    SYSFLAGS="-O1 -gopt -Mnoframe -Mdalign -Mbackslash -cpp -c++libs"
     FUFLAGS="-O0 -Mbackslash"
     FCMFLAG="-Mnomain"
     OMPFLAGS="-mp"
@@ -79,14 +70,15 @@ i?86*linux*)
     DEBUG_FLAGS="-Wall -pedantic -fbounds-check -ftrace=full"
     ;;
   *gfortran*)
-    SYSFLAGS="-O3 -g -mtune=native"
+    SYSFLAGS="-O3 -g -mtune=native -fno-lto"
     FUFLAGS="-O0 -mtune=native"
+    SLK_FC_FLAGS="-fallow-argument-mismatch"
     FCMFLAG=""
     OMPFLAGS="-fopenmp"
     NETCDFFLAGS="-DgFortran"
     DEBUG_FLAGS="-Og -g -Wall -pedantic -fbounds-check -ffpe-trap=invalid,zero,overflow"
     ;;
-  *ifort*)
+  *ifort* | *ifx* )
     OMPFLAGS="-openmp"
     NETCDFFLAGS="-DpgiFortran"
     CPU_FLAG=""
@@ -96,9 +88,9 @@ i?86*linux*)
        CPU_FLAG="-xHost"
        #CPU_FLAG=" "
        ;;
-      *2021* )
+      *2021* | *2022* | *2023* | *2024* | *2025* )
        CPU_FLAG=" "
-       OMPFLAGS="-qopenmp"
+       OMPFLAGS="-qopenmp -parallel"
        FCMFLAG="-nofor-main"
        ;;
       *17* | *18* | *19* )
@@ -112,7 +104,7 @@ i?86*linux*)
        CPU_FLAG=" "
        ;;
     esac
-    SYSFLAGS="-assume bscc -O3 -g -ip $CPU_FLAG"
+    SYSFLAGS="-assume bscc -O2 -g $CPU_FLAG"
     FUFLAGS="-assume bscc -O0 $CPU_FLAG"
     DEBUG_FLAGS="-check all -CB -traceback -check bound"
   ;;
@@ -130,10 +122,10 @@ i?86*linux*)
     NETCDFFLAGS="-Df2cFortran"
   esac
  ;;
-*86*apple* )
+*86*apple* | aarch*apple* | arm*apple* )
   case "${FC}" in
   *pgf9* | *ftn* | *pgfortran* )
-    SYSFLAGS="-O2 -g -fast -Munroll -Mnoframe -Mdalign -Mbackslash"
+    SYSFLAGS="-O1 -gopt -Mnoframe -Mdalign -Mbackslash -cpp"
     FUFLAGS="-O0 -g -Mbackslash"
     FCMFLAG="-Mnomain"
     OMPFLAGS="-mp"
@@ -141,7 +133,7 @@ i?86*linux*)
     DEBUG_FLAGS="-g -Minform=inform -Mbounds -Mchkptr -Mchkstk -Meh_frame"
     ;;
   *nvfortran* )
-    SYSFLAGS="-O2 -g -fast -Munroll -Mnoframe -Mdalign -Mbackslash"
+    SYSFLAGS="-O1 -gopt -Mnoframe -Mdalign -Mbackslash -cpp"
     FUFLAGS="-O0 -g -Mbackslash"
     FCMFLAG="-Mnomain"
     OMPFLAGS="-mp"
@@ -152,6 +144,7 @@ i?86*linux*)
   *gfortran*)
     SYSFLAGS="-O3 -g -mtune=native"
     FUFLAGS="-O0 -g -mtune=native"
+    SLK_FC_FLAGS="-fallow-argument-mismatch"
     FCMFLAG=""
     OMPFLAGS="-fopenmp"
     NETCDFFLAGS="-DgFortran"
@@ -173,7 +166,7 @@ i?86*linux*)
        CPU_FLAG="-mtune=pentium4"
        ;;
     esac
-    SYSFLAGS="-assume bscc -O3 -g -ip ${CPU_FLAG}"
+    SYSFLAGS="-assume bscc -O3 -g ${CPU_FLAG}"
     FUFLAGS="-assume bscc -O0 -g ${CPU_FLAG}"
     FCMFLAG="-nofor_main"
     OMPFLAGS="-openmp"
@@ -189,8 +182,16 @@ i?86*linux*)
   ;;
 ia64*linux* )
   case "${FC}" in
+  *ftn* )
+    SYSFLAGS="-O1 -g -emf -eZ"
+    FUFLAGS="-O0 -g -emf  -eZ"
+    FCMFLAG=""
+    OMPFLAGS="-fopenmp"
+    DEBUG_FLAGS="-g "
+  ;;
   *pgf9* | *ftn* | *pgfortran* )
-    SYSFLAGS="-O2 -g -fast -Munroll -Mnoframe -Mdalign -Mbackslash"
+    SYSFLAGS="-O1 -gopt -Mnoframe -Mdalign -Mbackslash -cpp"
+    #SYSFLAGS="-O2 -g -fast -Munroll -Mnoframe -Mdalign -Mbackslash"
     FUFLAGS="-O0 -g -Mbackslash"
     FCMFLAG="-Mnomain"
     OMPFLAGS="-mp"
@@ -199,7 +200,7 @@ ia64*linux* )
     DEBUG_FLAGS="-g -Minform=inform -Mbounds -Mchkptr -Mchkstk -Meh_frame"
     ;;
   *nvfortran* )
-    SYSFLAGS="-O2 -g -fast -Munroll -Mnoframe -Mdalign -Mbackslash"
+    SYSFLAGS="-O1 -gopt -Mnoframe -Mdalign -Mbackslash -cpp"
     FUFLAGS="-O0 -g -Mbackslash"
     FCMFLAG="-Mnomain"
     OMPFLAGS="-mp"
@@ -208,8 +209,9 @@ ia64*linux* )
     DEBUG_FLAGS="-g -Minform=inform -Mbounds -Mchkptr -Mchkstk -Meh_frame"
     ;;
   *gfortran*)
-    SYSFLAGS="-O3 -g -mtune=native"
+    SYSFLAGS="-O3 -g -mtune=native -fno-lto"
     FUFLAGS="-O0 -g -mtune=native"
+    SLK_FC_FLAGS="-fallow-argument-mismatch"
     FCMFLAG=""
     OMPFLAGS="-fopenmp"
     NETCDFFLAGS="-DgFortran"
@@ -241,7 +243,7 @@ ia64*linux* )
        CPU_FLAG=""
        ;;
     esac
-    SYSFLAGS="-assume bscc -O2 -g -ip ${CPU_FLAG}"
+    SYSFLAGS="-assume bscc -O2 -g ${CPU_FLAG}"
     FUFLAGS="-assume bscc -O0 -g ${CPU_FLAG}"
     FCMFLAG="-nofor_main"
     OMPFLAGS="-openmp"
@@ -267,10 +269,43 @@ ia64*linux* )
     NETCDFFLAGS="-Df2cFortran"
   esac
   ;;
+aarch*linux* | arm*linux* )
+  case "${FC}" in
+  *gfortran*)
+    SYSFLAGS="-O3 -g -mtune=native -fno-lto"
+    FUFLAGS="-O0 -g -mtune=native"
+    SLK_FC_FLAGS="-fallow-argument-mismatch"
+    FCMFLAG=""
+    OMPFLAGS="-fopenmp"
+    NETCDFFLAGS="-DgFortran"
+    DEBUG_FLAGS="-Og -g -Wall -pedantic -fbounds-check -ffpe-trap=invalid,zero,overflow"
+    ;;
+  *nvfortran* )
+    SYSFLAGS="-O1 -gopt -Mnoframe -Mdalign -Mbackslash -cpp -c++libs"
+    FUFLAGS="-O0 -g -Mbackslash -cpp"
+    FCMFLAG="-Mnomain"
+    OMPFLAGS="-mp"
+    def_compiler="-D_PGI"
+    NETCDFFLAGS="-DpgiFortran"
+    DEBUG_FLAGS="-g -Minform=inform -Mbounds -Mchkptr -Mchkstk -Meh_frame  -Mbackslash -cpp"
+    ;;
+  *)
+    SYSFLAGS="-g -O"
+    FUFLAGS="-O0"
+    NETCDFFLAGS="-Df2cFortran"
+  esac
+  ;;
 *x86*64* )
   case "${FC}" in
+  *ftn* )
+    SYSFLAGS="-O1 -g -emf -eZ"
+    FUFLAGS="-O0 -g -emf  -eZ"
+    FCMFLAG=""
+    OMPFLAGS="-fopenmp"
+    DEBUG_FLAGS="-g "
+  ;;
   *pgf9* | *ftn* | *pgfortran* | *nvfortran* )
-    SYSFLAGS="-O1 -gopt -Mnoframe -Mdalign -Mbackslash -cpp"
+    SYSFLAGS="-O1 -gopt -Mnoframe -Mdalign -Mbackslash -cpp -c++libs"
     #SYSFLAGS="-O2 -g -Munroll -Mnoframe -Mdalign -Mbackslash -cpp"
     FUFLAGS="-O0 -g -Mbackslash -cpp"
     FCMFLAG="-Mnomain"
@@ -280,8 +315,9 @@ ia64*linux* )
     DEBUG_FLAGS="-g -Minform=inform -Mbounds -Mchkptr -Mchkstk -Meh_frame  -Mbackslash -cpp"
     ;;
   *gfortran*)
-    SYSFLAGS="-O3 -g -mtune=native"
+    SYSFLAGS="-O3 -g -mtune=native -fno-lto"
     FUFLAGS="-O0 -g -mtune=native"
+    SLK_FC_FLAGS="-fallow-argument-mismatch"
     FCMFLAG=""
     OMPFLAGS="-fopenmp"
     NETCDFFLAGS="-DgFortran"
@@ -302,7 +338,7 @@ ia64*linux* )
     OMPFLAGS="-openmp"
     NETCDFFLAGS="-DpgiFortran"
     ;;
-  *ifort*)
+  *ifort* | *ifx* )
     OMPFLAGS="-openmp"
     CPU_FLAG=""
     FCMFLAG="-nofor_main"
@@ -311,9 +347,9 @@ ia64*linux* )
        #CPU_FLAG="-xHost"
        CPU_FLAG=" "
        ;;
-      *2020* | *2021* )
+      *2020* | *2021* | *2022* | *2023* | *2024* | *2025* )
        CPU_FLAG=" "
-       OMPFLAGS="-qopenmp"
+       OMPFLAGS="-qopenmp -parallel"
        FCMFLAG="-nofor-main"
        CFLAGS="-O2 -std=gnu99"
        ;;
@@ -334,9 +370,18 @@ ia64*linux* )
        CPU_FLAG=" "
        ;;
     esac
-    SYSFLAGS="-assume bscc -O3 -g -ip ${CPU_FLAG}"
+    SYSFLAGS="-assume bscc -O2 -g ${CPU_FLAG}"
     FUFLAGS="-assume bscc -O0 -g ${CPU_FLAG}"
     NETCDFFLAGS="-DpgiFortran"
+    DEBUG_FLAGS="-CB -traceback -debug full"
+    ;;
+  *ifx*)
+    OMPFLAGS="-qopenmp"
+    CPU_FLAG=""
+    FCMFLAG="-nofor-main"
+    CFLAGS="-O2 -std=gnu99"
+    SYSFLAGS="-O3 -g"
+    FUFLAGS="-O0 -g"
     DEBUG_FLAGS="-CB -traceback -debug full"
     ;;
   *openf9*)
@@ -365,7 +410,7 @@ alphaev*)
 powerpc64*linux* )
   case "${FC}" in
   *pgf9* | *ftn* | *pgfortran* )
-    SYSFLAGS="-O2 -g -fast -Munroll -Mnoframe -Mdalign -Mbackslash"
+    SYSFLAGS="-O1 -gopt -Mnoframe -Mdalign -Mbackslash -cpp"
     FUFLAGS="-O0 -g -Mbackslash"
     FCMFLAG="-Mnomain"
     OMPFLAGS="-mp"
@@ -374,7 +419,7 @@ powerpc64*linux* )
     DEBUG_FLAGS="-g -Minform=inform -Mbounds -Mchkptr -Mchkstk -Meh_frame"
     ;;
   *nvfortran* )
-    SYSFLAGS="-O2 -g -fast -Munroll -Mnoframe -Mdalign -Mbackslash"
+    SYSFLAGS="-O1 -gopt -Mnoframe -Mdalign -Mbackslash -cpp"
     FUFLAGS="-O0 -g -Mbackslash"
     FCMFLAG="-Mnomain"
     OMPFLAGS="-mp"
@@ -385,6 +430,7 @@ powerpc64*linux* )
   *gfortran*)
     SYSFLAGS="-O3 -g -mtune=native"
     FUFLAGS="-O0 -g -mtune=native"
+    SLK_FC_FLAGS="-fallow-argument-mismatch"
     FCMFLAG=""
     OMPFLAGS="-fopenmp"
     NETCDFFLAGS="-DgFortran"
@@ -449,6 +495,7 @@ AC_MSG_RESULT([$NETCDFFLAGS])
 AC_SUBST(CFLAGS)
 AC_SUBST(FCFLAGS)
 AC_SUBST(FCUFLAGS)
+AC_SUBST(SLK_FC_FLAGS)
 AC_SUBST(FUFLAGS)
 AC_SUBST(FCMFLAG)
 AC_SUBST(OMPFLAGS)

@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM,DV
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2016 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AMDV
 !
  subroutine cutoff_slab(q)
  !
@@ -29,8 +13,6 @@
  use D_lattice,     ONLY:alat
  use R_lattice,     ONLY:bz_samp,g_vec,bare_qpg,&
 &                        d3q_factor,RIM_qpg,q0_def_norm,idir
- use parallel_m,    ONLY:PP_indexes,PP_indexes_reset
- use parallel_int,  ONLY:PARALLEL_index
  implicit none
  !
  ! Work Space
@@ -38,12 +20,8 @@
  type(bz_samp) :: q
  integer       :: iq,ig,n_idx,n_max
  real(SP)      :: slab_vz,slab_vplane,lcut,pre_factor,R_circle,Sup,factorial
- type(PP_indexes) ::px
- character(schlen)  :: of_name
  
  lcut=alat(idir(1))/2.0_SP
- call PP_indexes_reset(px)
- call PARALLEL_index(px,(/q%nibz,wf_ng/))
  !
  do ig=1,wf_ng
    do iq=1,q%nibz
@@ -82,8 +60,5 @@
    bare_qpg(1,1) = real(1._SP/sqrt(pre_factor),KIND=SP)
    !
  endif
- !
- call of_open_close(of_name) 
- call PP_indexes_reset(px)
  !
 end subroutine

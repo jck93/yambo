@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AF, IM
+! Copyright (C) 2018 The Yambo Team
 !
-! This file is distributed under the terms of the GNU
-! General Public License. You can redistribute it and/or
-! modify it under the terms of the GNU General Public
-! License as published by the Free Software Foundation;
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will
-! be useful, but WITHOUT ANY WARRANTY; without even the
-! implied warranty of MERCHANTABILITY or FITNESS FOR A
-! PARTICULAR PURPOSE.  See the GNU General Public License
-! for more details.
-!
-! You should have received a copy of the GNU General Public
-! License along with this program; if not, write to the Free
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AF IM
 !
 subroutine PP_rotate_becp(isc,ibec,obec)
  !
@@ -42,7 +26,7 @@ subroutine PP_rotate_becp(isc,ibec,obec)
  use R_lattice,     ONLY:k_pt,b
  use qe_pseudo_m,   ONLY:bec_type,beccopy,d1,d2,d3,nh,upf,indv_ijkb0
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  ! vars
  !

@@ -1,41 +1,25 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2013 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine COLLISIONS_alloc_and_free(what,elements,actions,I)
  !
- use pars,           ONLY:cZERO,rZERO
+ use pars,           ONLY:cZERO,rZERO,DP,SP
  use plasma,         ONLY:N_plasma_poles_global
  use R_lattice,      ONLY:nqbz,nkibz
  use parallel_m,     ONLY:PAR_nPlasma,PAR_nQ_bz
  use collision_ext,  ONLY:COLLISIONS_element,COH_COLL_element,HXC_COLL_element,GW_NEQ_COLL_element,&
-&                         COLL_bands,&
+&                         COLL_bands,COLLISIONS_load_SP,&
 &                         GW_NEQ_collisions,COH_collisions,HXC_collisions,P_collisions,COLLISIONS_group
 #if defined _QED
  use QP_m,           ONLY:QP_QED_ng
  use collision_ext,  ONLY:P_COLL_element
 #endif
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  character(*)             :: what,elements,actions
  integer                  :: I
@@ -207,20 +191,30 @@ subroutine COLLISIONS_alloc_and_free(what,elements,actions,I)
            YAMBO_ALLOC(COLL(J)%v_c,(COLL(J)%N))
            COLL(J)%v_c=cZERO
            mem_size(4)=mem_size(4)+size(COLL(J)%v_c)
+           if(SP==DP.and.COLLISIONS_load_SP) then
+             YAMBO_ALLOC(COLL(J)%v_c_SP,(COLL(J)%N))
+             COLL(J)%v_c_SP=cZERO
+             mem_size(4)=mem_size(4)+size(COLL(J)%v_c_SP)
+           endif
          endif
        endif
        if (l_clean.and.(l_v1.or.l_all)) then
          YAMBO_FREE(COLL(J)%v_c)
+         if(SP==DP.and.allocated(COLL(J)%v_c_SP)) then
+            YAMBO_FREE(COLL(J)%v_c_SP)
+         endif
          YAMBO_FREE(COLL(J)%v_r)
        endif
        if (l_alloc.and.(l_table.or.l_all)) then
-         YAMBO_ALLOC(COLL(J)%table,(D(1,1):D(1,2),D(2,1):D(2,2),D(3,1):D(3,2)))
+         !AMBO_ALLOC(COLL(J)%table,(D(1,1):D(1,2),D(2,1):D(2,2),D(3,1):D(3,2)))
+         allocate(COLL(J)%table(D(1,1):D(1,2),D(2,1):D(2,2),D(3,1):D(3,2)))
          COLL(J)%table='f'
          COLL_grp%D=D
          mem_size(5)=mem_size(5)+size(COLL(J)%table)
        endif
        if (l_clean.and.(l_table.or.l_all)) then
-         YAMBO_FREE(COLL(J)%table)
+         !AMBO_FREE(COLL(J)%table)
+         deallocate(COLL(J)%table)
        endif
      enddo
      !

@@ -1,27 +1,11 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2014 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
-!
-subroutine Dipole_kb_init(Xen,Dip,io_err,ID)
+subroutine DIPOLE_kb_init(Xen,Dip,io_err,ID)
  !
  use pars,                ONLY:SP,pi
  use stderr,              ONLY:intc
@@ -34,7 +18,7 @@ subroutine Dipole_kb_init(Xen,Dip,io_err,ID)
  use pseudo,              ONLY:pp_kbv_dim,pp_n_l_times_proj_max,pp_table, &
 &                              pp_factor,pp_n_l_max
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels),  intent(in)    :: Xen
  type(DIPOLE_t),intent(inout) :: Dip
@@ -175,5 +159,5 @@ subroutine Dipole_kb_init(Xen,Dip,io_err,ID)
      !
    end function
    !
-end subroutine
+end subroutine DIPOLE_kb_init
 

@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2016 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
  !
@@ -29,13 +13,14 @@ subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
  use pars,          ONLY:SP,pi,cZERO
  use com,           ONLY:msg
  use frequency,     ONLY:w_samp
- use electrons,     ONLY:levels,spin_occ,spin,n_spin
+ use electrons,     ONLY:levels,spin_occ,spin,n_spin,n_spinor
  use LIVE_t,        ONLY:live_timing
  use hamiltonian,   ONLY:H_potential
  use D_lattice,     ONLY:DL_vol,sop_inv
+ use tddft,         ONLY:tddft_wf_t
  use xc_functionals,ONLY:F_xc,V_xc,F_xc_mat,magn,XC_potential_driver
  use global_XC,     ONLY:WF_kind,WF_xc_functional
- use parallel_int,  ONLY:PP_redux_wait
+ use parallel_int,  ONLY:PP_redux_wait,PP_wait
  use parallel_m,    ONLY:PAR_IND_Q_bz,MPI_COMM_NULL,ncpu,myid,COMM_copy,yMPI_COMM,&
 &                        PAR_n_Bp_mat_elements,PAR_COM_QP_A2A,PAR_COM_QP_INDEX,PAR_COM_Q_INDEX,&
 &                        PAR_IND_Bp_mat,PAR_nQ_bz,PAR_COM_G_b_A2A,PAR_COM_G_b_index_global
@@ -47,14 +32,15 @@ subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
  use QP_m,          ONLY:QP_ng_SH,QP_ng_Sx,QP_ng_Sc
  use IO_int,        ONLY:io_control,IO_and_Messaging_switch
  use IO_m,          ONLY:OP_RD_CL,REP,VERIFY,NONE,io_COLLs
- use X_m,           ONLY:X_ALLOC_elemental,X_mat,X_t
- use interfaces,    ONLY:WF_load
+ use ALLOC,         ONLY:X_ALLOC_elemental
+ use X_m,           ONLY:X_mat,X_t
+ use interfaces,    ONLY:WF_load,TDDFT_ALDA_eh_space_R_kernel
  use wave_func,     ONLY:WF,WF_buffer,WF_buffered_IO
  use R_lattice,     ONLY:qindx_S,bz_samp,g_rot,minus_G
  use hamiltonian,   ONLY:B_mat_index
  use fft_m,         ONLY:fft_size
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels)             ::E
  type(bz_samp)            ::k,q,Xk
@@ -70,13 +56,13 @@ subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
  !
  type(elemental_collision):: isc_XC,iscp_XC,isc_H,iscp_H
  type(yMPI_comm)          :: LOCAL_yMPI_COMM
+ type(tddft_wf_t), target :: tddft_wf
  real(SP)                 :: Co
  complex(SP)              :: pre_factor1,pre_factor2
  !
  complex(SP), allocatable :: EM1s(:,:),rhotw_tmp(:)
  integer                  :: io_err,ID_X,ID_HXC,ID_COH,TMP_VEC(ncpu)
  integer, external        :: io_X
- complex(SP),   external  :: TDDFT_ALDA_R_space
  !
  call timing(trim(H_potential)//' Collisions',OPR='start')
  !
@@ -158,7 +144,7 @@ subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
    isc_H%iqref =0
    isc_H%ngrho =N_g_vecs_H
    !
-   call elemental_collision_alloc(isc_H ,NG=N_g_vecs_H,NG_GAMP=(/N_g_vecs_H,    1   /),TITLE='HARTREE')
+   call elemental_collision_alloc(isc_H ,NG=N_g_vecs_H,GAMP_NG=(/N_g_vecs_H,    1   /),TITLE='HARTREE')
    call elemental_collision_alloc(iscp_H,NG=N_g_vecs_H,                                TITLE='HARTREE')
    !
    YAMBO_ALLOC(rhotw_tmp,(N_g_vecs_H))
@@ -173,7 +159,7 @@ subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
  isc_XC%iqref =0
  isc_XC%ngrho =NG_XC
  !
- call elemental_collision_alloc(iscp_XC,NG=NG_XC,NG_GAMP=(/N_g_vecs_X,  1  /),TITLE=trim(H_potential))
+ call elemental_collision_alloc(iscp_XC,NG=NG_XC,GAMP_NG=(/N_g_vecs_X,  1  /),TITLE=trim(H_potential))
  !
  if (l_compute_screening) then
    !
@@ -186,7 +172,7 @@ subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
    call X_ALLOC_elemental('X',(/X%ng,X%ng,1/))
    YAMBO_ALLOC(EM1s,(N_g_vecs_C,N_g_vecs_C))
    !
-   call elemental_collision_alloc(isc_XC, NG=NG_XC,NG_GAMP=(/N_g_vecs_C,N_g_vecs_C/),TITLE=trim(H_potential))
+   call elemental_collision_alloc(isc_XC, NG=NG_XC,GAMP_NG=(/N_g_vecs_C,N_g_vecs_C/),TITLE=trim(H_potential))
    !
  else
    !
@@ -197,6 +183,10 @@ subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
  Co=1._SP
  if (COLLISIONS_HXC_use_TDDFT) then
    Co=4._SP*pi/DL_vol/real(q%nbz,SP)
+   YAMBO_ALLOC(tddft_wf%rhotwr1,(fft_size*n_spinor*n_spinor))
+   YAMBO_ALLOC(tddft_wf%rhotwr2,(fft_size*n_spinor*n_spinor))
+   YAMBO_ALLOC(tddft_wf%WF_symm1,(fft_size,n_spinor))
+   YAMBO_ALLOC(tddft_wf%WF_symm2,(fft_size,n_spinor))
    YAMBO_ALLOC(F_xc,(fft_size,n_spin,n_spin))
    YAMBO_ALLOC(V_xc,(fft_size,n_spin))
    V_xc=0._SP
@@ -221,6 +211,7 @@ subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
  PAR_COLL_min=0
  !
  first_coll=-1
+ last_coll =0
  !
  do i_loop=1,2
    if (allocated(HXC_collisions%PAR_IND%element_1D)) then
@@ -349,7 +340,11 @@ subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
  endif
  !
  if (COLLISIONS_HXC_use_TDDFT) then
-   YAMBO_FREE(F_xc)
+   YAMBO_FREE(tddft_wf%rhotwr1)
+   YAMBO_FREE(tddft_wf%rhotwr2)
+   YAMBO_FREE(tddft_wf%WF_symm1)
+   YAMBO_FREE(tddft_wf%WF_symm2)
+   YAMBO_FREE(F_xc_mat)
    YAMBO_FREE(magn)
  endif
  !
@@ -437,7 +432,7 @@ subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
                  i_p_s =k%star(i_p,i_star)
                  iscp_H%is(3) = i_p_s
                  iscp_H%os(3) = i_p_s
-                 pre_factor2=pre_factor2+TDDFT_ALDA_R_space(isc_H%is,isc_H%os,iscp_H%is,iscp_H%os,'RES')
+                 pre_factor2=pre_factor2+TDDFT_ALDA_eh_space_R_kernel(isc_H%is,isc_H%os,iscp_H%is,iscp_H%os,tddft_wf,'RES')
                enddo
              endif
              !
@@ -466,7 +461,7 @@ subroutine COLLISIONS_HXC(X,Xk,E,k,q,Xw)
                  i_p_s =k%star(i_p,i_star)
                  iscp_H%is(3) = i_p_s
                  iscp_H%os(3) = i_p_s
-                 pre_factor2=pre_factor2+TDDFT_ALDA_R_space(isc_H%is,isc_H%os,iscp_H%is,iscp_H%os,'CPL')
+                 pre_factor2=pre_factor2+TDDFT_ALDA_eh_space_R_kernel(isc_H%is,isc_H%os,iscp_H%is,iscp_H%os,tddft_wf,'CPL')
                enddo
              endif
              !

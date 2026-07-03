@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM,AF
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2016 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AM AF
 !
 subroutine LINEAR_ALGEBRA_driver(idriver,lib_in,&
 &                                M,M_slk,&
@@ -27,29 +11,34 @@ subroutine LINEAR_ALGEBRA_driver(idriver,lib_in,&
 &                                B,B_slk,&
 &                                C,C_slk,&
 &                                V_left,V_right,E_real,E_cmpl,&
-&                                SVD_digits,det)
+&                                SVD_digits,det,neig)
  !
  ! Operations:
  !
  ! * INV:   M_slk/M => M_slk/M
  !
  ! * DIAGO: M => M + E_real/E_cmpl + V_left/V_right (SLK external arrays still to implement)
+ ! * DIAGX: M => M + few E_real/E_cmpl + V_left/V_right
+ ! * CHASE: M => M + few E_real/E_cmpl + V_left/V_right
  !
  ! * LIN_SYSTEM: M_slk/M + B_slk/B => B_slk/B 
  !
  ! * MAT_MUL: M_slk/M + B_slk/B => C_slk/C 
  !
  use pars,          ONLY:SP,cONE,cZERO
- use linear_algebra,ONLY:INV,DIAGO,LIN_SYS,SVD_INV,MAT_MUL,USE_LK,USE_SLK
+ use linear_algebra,ONLY:INV,DIAGO,DIAGX,CHASE,LIN_SYS,SVD_INV,MAT_MUL,USE_LK,USE_SLK
  use matrix,        ONLY:PAR_matrix,MATRIX_reset
  use wrapper,       ONLY:M_by_M
  use parallel_m,    ONLY:linear_algebra_is_parallel,ncpu
  use interfaces,    ONLY:MATRIX_transfer
  use BS,            ONLY:BS_block,BS_H_dim
  use timing_m,      ONLY:timing
- use cuda_m,        ONLY:have_cuda
+ use gpu_m,         ONLY:have_gpu
+ use devxlib,       ONLY:devxlib_mapped
+ use mpi,           ONLY:MPI_Wtime
  !
-#include<memory.h>
+#include<y_memory.h>
+#include<dev_defs.h>
  !
  integer                    :: idriver
  integer,          optional :: lib_in
@@ -66,30 +55,38 @@ subroutine LINEAR_ALGEBRA_driver(idriver,lib_in,&
  complex(SP),      optional :: E_cmpl(:)
  integer,          optional :: SVD_digits 
  complex(SP),      optional :: det
+ integer,          optional :: neig
  !
  ! Work Spaces ...
  !
  complex(SP)         :: det_
  integer             :: N,lib_in_use
  type (PAR_matrix)   :: M_loc,B_loc,C_loc,V_loc
- logical             :: USE_CUDA
+ logical             :: USE_GPU
+ double precision    :: starttime,endtime
+ character(len=20)   :: matfilename
+ real(SP), allocatable :: E_raux(:)
  !
  call timing("LINEAR ALGEBRA",OPR="start")
  !
  ! M dimension
  !
- USE_CUDA=.false.
+ USE_GPU=.false.
  !
  if (present(M_slk)) then
    N=M_slk%N
 #if defined _SCALAPACK 
    if (M_slk%kind=="SLK") lib_in_use=USE_SLK
 #endif
-   if (have_cuda.and.allocated(M_slk%blc_d)) USE_CUDA=.true.
+   if (have_gpu.and.devxlib_mapped(DEV_VAR(M_slk%blc))) USE_GPU=.true.
  else if (present(M_bse)) then
    N=BS_H_dim
  else if (present(M)) then
    N=size(M,1)
+ endif
+
+ if(present(neig)) then
+    if ( neig<=0.or.neig>size(M,1) ) neig = min(n,10)
  endif
  !
  ! Decide which to use among LK or SLK
@@ -101,25 +98,32 @@ subroutine LINEAR_ALGEBRA_driver(idriver,lib_in,&
  if (present(lib_in)) then
    lib_in_use=lib_in
  endif
- if (idriver==SVD_INV.or.(idriver==DIAGO.and.present(E_cmpl))) lib_in_use=USE_LK 
+ if(idriver==SVD_INV.or.((idriver==DIAGO.or.idriver==DIAGX&
+&                        .or.idriver==CHASE).and.present(E_cmpl))) lib_in_use=USE_LK 
  if (.not.linear_algebra_is_parallel) lib_in_use=USE_LK
  !
  ! whether to use CUDA lib
  !
- if (idriver==SVD_INV.or.idriver==DIAGO) USE_CUDA=.false.
- if (USE_CUDA) lib_in_use=USE_LK
+ if (idriver==SVD_INV.or.idriver==INV.or.idriver==DIAGO.or.idriver==DIAGX&
+&                    .or.idriver==MAT_MUL) USE_GPU=.false.
+ if (USE_GPU) lib_in_use=USE_LK
+ !
+#if ! defined _CHASE
+ if (idriver==CHASE) idriver=DIAGO
+#endif
  !
 #if defined _SCALAPACK
- if (idriver==DIAGO.and.present(E_cmpl).and.ncpu>1) then
+ if ((idriver==DIAGO.or.idriver==DIAGX.or.idriver==CHASE).and.present(E_cmpl).and.ncpu>1) then
    !
    call warning('Parallel non-herm diag not yet implemented. Switching to LK')
    lib_in_use=USE_LK
    !
  endif
+
  !
  ! =============== PARALLEL SECTION ==========================================================
  !
- if (lib_in_use==USE_SLK.and..not.USE_CUDA) then 
+ if((lib_in_use==USE_SLK.and..not.USE_GPU).or.(lib_in_use==USE_SLK.and.idriver==CHASE)) then 
    !
    if (.not.present(M_slk)) then
      !
@@ -134,12 +138,34 @@ subroutine LINEAR_ALGEBRA_driver(idriver,lib_in,&
      !
    endif
    !
-   if (idriver==DIAGO) then
+   if (idriver==DIAGO.or.idriver==DIAGX.or.idriver==CHASE) then
      !
      call MATRIX_init("SLK",  V_loc, N, 1 )
      YAMBO_ALLOC(V_loc%blc,(V_loc%BLCrows(1):V_loc%BLCrows(2),V_loc%BLCcols(1):V_loc%BLCcols(2),V_loc%Nb))
      !
-     call PARALLEL_HERMITIAN_diagonalization( M_loc, V_loc, N, E_real )
+     if(idriver==DIAGO) call PARALLEL_HERMITIAN_diago( M_loc, V_loc, N, E_real )
+     !
+     if(idriver==DIAGX) call PARALLEL_HERMITIAN_diagx( M_loc, V_loc, N, E_real, neig )
+     !
+#if defined _CHASE
+     !
+     if (idriver==CHASE) then
+       !
+       if (present(E_cmpl)) then
+         !
+         !... non-Hermitian case
+         !call PARALLEL_PSEUDOHERM_chase( M_loc, V_loc, N, E_real, neig )
+         !
+       else
+         ! 
+         !... Hermitian case
+         call PARALLEL_HERMITIAN_chase( M_loc, V_loc, N, E_real, neig )
+         !
+       endif
+       !
+     endif
+     ! 
+#endif
      !
      call MATRIX_transfer( M_in = V_loc , M=M )
      YAMBO_FREE(V_loc%blc)
@@ -210,7 +236,7 @@ subroutine LINEAR_ALGEBRA_driver(idriver,lib_in,&
  !
  ! =============== SERIAL SECTION ============================================================
  !
- if (lib_in_use==USE_LK.and..not.USE_CUDA) then
+ if (lib_in_use==USE_LK.and..not.USE_GPU) then
    !
    ! ####> SVD INVERSION (Using Singular Value decomposition)
    !
@@ -241,19 +267,70 @@ subroutine LINEAR_ALGEBRA_driver(idriver,lib_in,&
        !
        !... non-Hermitian case
        if (present(M_slk)) then
-         call SERIAL_diagonalization(N,M_slk%blc(:,:,M_slk%I),E_cmpl,V_left,V_right)
+         call SERIAL_diago(N,M_slk%blc(:,:,M_slk%I),E_cmpl,V_left,V_right)
        else
-         call SERIAL_diagonalization(N,M,E_cmpl,V_left,V_right)
+         call SERIAL_diago(N,M,E_cmpl,V_left,V_right)
        endif
      else
        !
        !... Hermitian case
        if (present(M_slk)) then
-         call SERIAL_HERMITIAN_diagonalization(N,M_slk%blc(:,:,M_slk%I),E_real)
+         call SERIAL_HERMITIAN_diago(N,M_slk%blc(:,:,M_slk%I),E_real)
        else
-         call SERIAL_HERMITIAN_diagonalization(N,M,E_real)
+         call SERIAL_HERMITIAN_diago(N,M,E_real)
        endif
      endif
+     !
+   else if (idriver==DIAGX) then
+     !
+     if (present(E_cmpl)) then
+       !
+       !... non-Hermitian case
+       if (present(M_slk)) then
+         call SERIAL_diago(N,M_slk%blc(:,:,M_slk%I),E_cmpl,V_left,V_right)
+       else
+         call SERIAL_diago(N,M,E_cmpl,V_left,V_right)
+       endif
+       !
+     else
+       !
+       !... Hermitian case
+       if (present(M_slk)) then
+         call SERIAL_HERMITIAN_diagx(N,M_slk%blc(:,:,M_slk%I),E_real,neig)
+       else
+         call SERIAL_HERMITIAN_diagx(N,M,E_real,neig)
+       endif
+       !
+     endif
+     !
+#if defined _CHASE
+   else if(idriver==CHASE) then
+     !
+     if (present(E_cmpl)) then
+       !
+       !... non-Hermitian case
+       YAMBO_ALLOC( E_raux,(neig) )
+       !
+       if (present(M_slk)) then
+         call SERIAL_PSEUDOHERM_chase(N,M_slk%blc(:,:,M_slk%I),E_raux,V_left,V_right,neig)
+       else
+         call SERIAL_PSEUDOHERM_chase(N,M,E_raux,V_left,V_right,neig)
+       endif
+       !
+       E_cmpl(1:neig)=cmplx(E_raux(1:neig),kind=SP)
+       YAMBO_FREE( E_raux )
+       !
+     else
+       !
+       !... Hermitian case
+       if (present(M_slk)) then
+         call SERIAL_HERMITIAN_chase(N,M_slk%blc(:,:,M_slk%I),E_real,neig)
+       else
+         call SERIAL_HERMITIAN_chase(N,M,E_real,neig)
+       endif
+       !
+     endif
+#endif
      !
    endif
    !
@@ -283,14 +360,18 @@ subroutine LINEAR_ALGEBRA_driver(idriver,lib_in,&
  !
  ! =============== SERIAL SECTION GPU ============================================================
  !
- if (lib_in_use==USE_LK.and.USE_CUDA) then
+ if (lib_in_use==USE_LK.and.USE_GPU) then
    !
 #if defined _CUDA
    !
    ! ####> LINEAR SYSTEM SOLUTION
    !
    if (idriver==LIN_SYS) then
-     call SERIAL_lin_system_gpu(N,N,M_slk%blc_d(:,:,M_slk%I),B_slk%blc_d(:,:,B_slk%I))
+#if defined _GPU && defined _PGI
+     call SERIAL_lin_system_gpu(N,N,DEV_VAR(M_slk%blc)(:,:,M_slk%I),DEV_VAR(B_slk%blc)(:,:,B_slk%I))
+#else
+     call error('[LA] GPU support required but not present')
+#endif
    endif
    !
    ! ###> SERIAL INVERSION 

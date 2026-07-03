@@ -1,34 +1,18 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2020 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-!
-! This file is distributed under the terms of the GNU
-! General Public License. You can redistribute it and/or
-! modify it under the terms of the GNU General Public
-! License as published by the Free Software Foundation;
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will
-! be useful, but WITHOUT ANY WARRANTY; without even the
-! implied warranty of MERCHANTABILITY or FITNESS FOR A
-! PARTICULAR PURPOSE.  See the GNU General Public License
-! for more details.
-!
-! You should have received a copy of the GNU General Public
-! License along with this program; if not, write to the Free
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine RT_free( )
  !
  use R_lattice,      ONLY:bz_samp_FineGd_reset
- use DIPOLES,        ONLY:DIP_alloc
+ use ALLOC,          ONLY:DIPOLE_ALLOC_global
 #if defined _ELPH
- use interfaces,     ONLY:ELPH_alloc
-#endif
+ use ALLOC,          ONLY:ELPH_alloc
  use ELPH,           ONLY:Q_io_map,GKKP_ep_sq,GKKP_pe_sq
+#endif
  use hamiltonian,    ONLY:H_free
  use xc_functionals, ONLY:E_xc
  use real_time,      ONLY:DbGd_EE_scatt_table,RT_TIME_status,REF_V_xc_sc,&
@@ -42,24 +26,18 @@ subroutine RT_free( )
 #endif
  use RT_lifetimes,   ONLY:RT_ALL_lifetimes_free,q_weight_RT
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  call H_free()
  !
- call DIP_alloc('DIP_iR')
- call DIP_alloc('DIP_P')
- call DIP_alloc('DIP_v')
- call DIP_alloc('DIP_spin')
- call DIP_alloc('DIP_orbital')
- call DIP_alloc('P_square')
- call DIP_alloc('DIP_P_spinor')
+ call DIPOLE_ALLOC_global( )
  !
  call RT_ALL_lifetimes_free()
  call RT_ALL_occupations_free()
  !
  YAMBO_FREE(DbGd_EE_scatt_table)
  YAMBO_FREE(E_xc)
- YAMBO_FREE(RT_TIME_status)
+ !AMBO_FREE(RT_TIME_status)
  YAMBO_FREE(REF_V_xc_sc)
  !
  YAMBO_FREE(REF_V_hartree_sc)
@@ -88,9 +66,11 @@ subroutine RT_free( )
  YAMBO_FREE(rho_reference)
  YAMBO_FREE(magn_reference)
  YAMBO_FREE(RT_Deph_Matrix)
- YAMBO_FREE(Q_io_map)
  !
 #if defined _ELPH
+ !
+ YAMBO_FREE(Q_io_map)
+ !
  call ELPH_alloc('FREE',GKKP=GKKP_ep_sq)
  call ELPH_alloc('FREE',GKKP=GKKP_pe_sq)
 #endif

@@ -1,30 +1,14 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2017 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine MEM_report( REPORT )
  !
  use pars,         ONLY:lchlen
- use memory,       ONLY:MEMs,N_MEM_elements,mem_string,MEM_element,MAX_MEM_Kb,N_MEM_SAVE_elements,&
+ use y_memory,       ONLY:MEMs,N_MEM_elements,mem_string,MEM_element,MAX_MEM_Kb,N_MEM_SAVE_elements,&
 &                       LARGE_MEMs,MEM_treshold,MEM_SAVE_treshold,HOST_,DEV_
  use units,        ONLY:Kilobyte
  use com,          ONLY:msg,fat_log
@@ -77,7 +61,7 @@ subroutine MEM_report( REPORT )
    enddo
  endif
  !
-#ifdef _CUDA
+#ifdef _GPU
  write(msg_,'(a8,a," : ",a,3x)') trim(PREFIX),  "Max memory used (HOST) ",trim(mem_string(MAX_MEM_Kb(HOST_)))
  call msg("nr",msg_(1:len_trim(msg_)))
  write(msg_,'(a8,a," : ",a,3x)') trim(PREFIX),  "Max memory used (DEV)  ",trim(mem_string(MAX_MEM_Kb(DEV_)))

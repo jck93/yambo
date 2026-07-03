@@ -1,42 +1,27 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2017 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
-!
-subroutine PARALLEL_global_Self_Energy(E,Xk,q)
+subroutine PARALLEL_global_Self_Energy(E,Xk,q,ENVIRONMENT)
  !
  use electrons,     ONLY:levels
  use R_lattice,     ONLY:bz_samp,nqbz,nXkibz,nXkbz
- use drivers,       ONLY:l_eval_collisions,l_sc_electric
+ use drivers,       ONLY:l_eval_collisions,l_sc_electric,l_sc_run,l_real_time
  use parallel_int,  ONLY:PARALLEL_index,PARALLEL_assign_chains_and_COMMs,&
 &                        PARALLEL_live_message,PARALLEL_MATRIX_distribute
  use IO_m,          ONLY:io_COLLs
  use IO_int,        ONLY:IO_and_Messaging_switch
  use QP_m,          ONLY:QP_n_states,QP_nk
- use openmp,        ONLY:n_threads_SE,OPENMP_set_threads
+ use openmp,        ONLY:n_threads_SE,n_threads_SX,OPENMP_set_threads
  use parallel_m,    ONLY:HEAD_QP_cpu,HEAD_b_cpu,master_cpu,n_WF_bands_to_load,COMM_copy,&
 &                        PAR_Q_bz_range,PAR_Q_ibz_range,PAR_n_bands,PAR_build_index,ncpu,PAR_INDEX_copy
  ! COMMUNICATORS
- use parallel_m,    ONLY:PAR_COM_QP_INDEX,PAR_COM_Q_INDEX,PAR_COM_QP_A2A,PAR_COM_G_b_INDEX, &
-&                        PAR_COM_Q_A2A
+ use parallel_m,    ONLY:PAR_COM_QP_INDEX,PAR_COM_Q_INDEX,PAR_COM_RL_INDEX,PAR_COM_G_b_INDEX,&
+&                        PAR_COM_QP_A2A,PAR_COM_Q_A2A,PAR_COM_RL_A2A,PAR_COM_SE_WORLD,&
+&                        PAR_COM_SE_WORLD_RL_resolved
  ! IND
  use parallel_m,    ONLY:PAR_IND_QP,PAR_IND_Q_ibz,PAR_IND_G_b,PAR_IND_Q_bz,PAR_IND_Xk_ibz,PAR_IND_G_k,&
 &                        PAR_IND_DIPk_bz,PAR_IND_DIPk_ibz,PAR_IND_OVLPk_ibz
@@ -67,10 +52,12 @@ subroutine PARALLEL_global_Self_Energy(E,Xk,q)
  use ELPH,          ONLY:elph_use_q_grid
 #endif
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels)         :: E
  type(bz_samp)        :: Xk,q
+ character(*)         :: ENVIRONMENT
+
  !
  ! Work space
  !
@@ -79,13 +66,38 @@ subroutine PARALLEL_global_Self_Energy(E,Xk,q)
  integer              :: i_k,nb_mat
 #endif
  !
- CALL PARALLEL_structure(3,(/"q ","qp","b "/))
+ ! AF: here we disable the RL parallelism (g) for SC and RT, where
+ !     the parallel structure needs to be adapted to the SE g parallelism
  !
- call PARALLEL_assign_chains_and_COMMs(3,COMM_index_1=PAR_COM_Q_INDEX,&
-&                                        COMM_index_2=PAR_COM_QP_INDEX,&
-&                                        COMM_index_3=PAR_COM_G_b_INDEX,&
-&                                        COMM_A2A_1=PAR_COM_Q_A2A,&
-&                                        COMM_A2A_2=PAR_COM_QP_A2A)
+ if (l_sc_run.or.l_real_time) then
+   !
+   call PARALLEL_structure(3,(/"q ","qp","b "/))
+   call PARALLEL_assign_chains_and_COMMs(3,COMM_index_1=PAR_COM_Q_INDEX,&
+&                                          COMM_index_2=PAR_COM_QP_INDEX,&
+&                                          COMM_index_3=PAR_COM_G_b_INDEX,&
+&                                          COMM_A2A_1=PAR_COM_Q_A2A,&
+&                                          COMM_A2A_2=PAR_COM_QP_A2A)
+   !
+ else
+   !
+   call PARALLEL_structure(4,(/"q ","g ","qp","b "/))
+   call PARALLEL_assign_chains_and_COMMs(4,COMM_index_1=PAR_COM_Q_INDEX,&
+&                                          COMM_index_2=PAR_COM_RL_INDEX,&
+&                                          COMM_index_3=PAR_COM_QP_INDEX,&
+&                                          COMM_index_4=PAR_COM_G_b_INDEX,&
+&                                          COMM_A2A_1=PAR_COM_Q_A2A,&
+&                                          COMM_A2A_2=PAR_COM_RL_A2A,&
+&                                          COMM_A2A_3=PAR_COM_QP_A2A)
+ endif
+ !
+ ! COMMs setup
+ !
+ call COMM_copy(PAR_COM_Q_A2A,PAR_COM_SE_WORLD)
+ call COMM_copy(PAR_COM_Q_A2A,PAR_COM_SE_WORLD_RL_resolved)
+ !
+ !
+ if (PAR_COM_RL_INDEX%n_CPU>1) call COMM_copy(PAR_COM_RL_A2A,PAR_COM_SE_WORLD_RL_resolved)
+ !
  !
  ! The routine PARALLEL_assign_chains_and_COMMs cannot define COMMUNICATORS for internal
  ! A2A when there is no internal distribution
@@ -102,7 +114,7 @@ subroutine PARALLEL_global_Self_Energy(E,Xk,q)
  YAMBO_ALLOC(PAR_QP_index,(QP_n_states))
  PAR_QP_index=0
  call PAR_build_index(PAR_IND_QP,QP_n_states,PAR_QP_index,PAR_nQP)
- call PARALLEL_live_message("QPs",ENVIRONMENT="Self_Energy",&
+ call PARALLEL_live_message("QPs",ENVIRONMENT=ENVIRONMENT,&
 &                           LOADED=PAR_IND_QP%n_of_elements(PAR_IND_QP_ID+1),TOTAL=QP_n_states,&
 &                           NCPU=PAR_COM_QP_INDEX%n_CPU)
  !
@@ -120,7 +132,7 @@ subroutine PARALLEL_global_Self_Energy(E,Xk,q)
    call PARALLEL_index(PAR_IND_Q_ibz,(/PAR_Q_ibz_range(2)/),COMM=PAR_COM_Q_INDEX,CONSECUTIVE=.TRUE.,NO_EMPTIES=.TRUE.)
    PAR_IND_Q_ibz_ID=PAR_COM_Q_INDEX%CPU_id
    PAR_nQ_ibz=PAR_IND_Q_ibz%n_of_elements(PAR_IND_Q_ibz_ID+1)
-   call PARALLEL_live_message("Q("//trim(WHAT)//")",ENVIRONMENT="Self_Energy",&
+   call PARALLEL_live_message("Q("//trim(WHAT)//")",ENVIRONMENT=ENVIRONMENT,&
 &                             LOADED=PAR_IND_Q_ibz%n_of_elements(PAR_IND_Q_ibz_ID+1),TOTAL=PAR_Q_ibz_range(2),&
 &                             NCPU=PAR_COM_Q_INDEX%n_CPU)
    !
@@ -132,7 +144,7 @@ subroutine PARALLEL_global_Self_Energy(E,Xk,q)
    call PARALLEL_index(PAR_IND_Q_bz,(/PAR_Q_bz_range(2)/),COMM=PAR_COM_Q_INDEX,CONSECUTIVE=.TRUE.,NO_EMPTIES=.TRUE.)
    PAR_IND_Q_bz_ID=PAR_COM_Q_INDEX%CPU_id
    PAR_nQ_bz=PAR_IND_Q_bz%n_of_elements(PAR_IND_Q_bz_ID+1)
-   call PARALLEL_live_message("Q("//trim(WHAT)//")",ENVIRONMENT="Self_Energy",&
+   call PARALLEL_live_message("Q("//trim(WHAT)//")",ENVIRONMENT=ENVIRONMENT,&
 &                              LOADED=PAR_IND_Q_bz%n_of_elements(PAR_IND_Q_bz_ID+1),TOTAL=PAR_Q_bz_range(2),&
 &                              NCPU=PAR_COM_Q_INDEX%n_CPU)
    !
@@ -207,7 +219,7 @@ subroutine PARALLEL_global_Self_Energy(E,Xk,q)
  !
  HEAD_b_cpu=PAR_COM_G_b_index%CPU_id==0
  !
- call PARALLEL_live_message("G bands",ENVIRONMENT="Self_Energy",&
+ call PARALLEL_live_message("G bands",ENVIRONMENT=ENVIRONMENT,&
 &                           LOADED=PAR_IND_G_b%n_of_elements(PAR_IND_G_b_ID+1),&
 &                           TOTAL=PAR_n_bands(2)-PAR_n_bands(1)+1,NCPU=PAR_COM_G_b_INDEX%n_CPU)
  !
@@ -233,12 +245,12 @@ subroutine PARALLEL_global_Self_Energy(E,Xk,q)
    nb_mat=(COLL_bands(2)-COLL_bands(1)+1)**2
    call PARALLEL_MATRIX_distribute(PAR_COM_G_b_INDEX,PAR_IND_Bp_mat,COLL_bands,PAR_n_elements=PAR_n_Bp_mat_elements)
    !
-   call PARALLEL_live_message("Bands Matrix (prime)",ENVIRONMENT="Self_Energy",&
+   call PARALLEL_live_message("Bands Matrix (prime)",ENVIRONMENT=ENVIRONMENT,&
 &                             LOADED=PAR_n_Bp_mat_elements,TOTAL=nb_mat,NCPU=PAR_COM_G_b_INDEX%n_CPU)
    !
    call PARALLEL_index(PAR_IND_G_k,(/QP_nk/),COMM=PAR_COM_Q_INDEX,CONSECUTIVE=.TRUE.,NO_EMPTIES=.TRUE.)
    !
-   call PARALLEL_live_message("k-q",ENVIRONMENT="Self_Energy",LOADED=count( PAR_IND_G_k%element_1D ),&
+   call PARALLEL_live_message("k-q",ENVIRONMENT=ENVIRONMENT,LOADED=count( PAR_IND_G_k%element_1D ),&
 &                             TOTAL=QP_nk)
    !
  endif
@@ -301,6 +313,11 @@ subroutine PARALLEL_global_Self_Energy(E,Xk,q)
  !
  call IO_and_Messaging_switch("+output",CONDITION=master_cpu)
  !
- call OPENMP_set_threads(n_threads_in=n_threads_SE)
+ if ( trim(ENVIRONMENT)=="Self_Energy" ) then 
+   call OPENMP_set_threads(n_threads_in=n_threads_SE)
+   n_threads_SX=n_threads_SE
+ else if ( trim(ENVIRONMENT)=="Sigma_X" ) then 
+   call OPENMP_set_threads(n_threads_in=n_threads_SX)
+ endif
  !
 end subroutine PARALLEL_global_Self_Energy

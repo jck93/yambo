@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM, DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2006 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AM DS
 !
 subroutine QP_apply_interpolate_QP(i_ACTION,bands,en,k,qp)
  !
@@ -32,19 +16,22 @@ subroutine QP_apply_interpolate_QP(i_ACTION,bands,en,k,qp)
  ! This is true both at zero and finite temperature. Indeed also at finite temperature
  ! when the theory is causal the GF must be rotated to the real-energy axis.
  !
- use pars,          ONLY:SP,schlen
+ use pars,          ONLY:SP,schlen,cZERO
  use units,         ONLY:HA2EV
+ use IO_int,        ONLY:io_control
+ use IO_m,          ONLY:OP_WR_CL,LOG
  use electrons,     ONLY:n_sp_pol,spin
  use com,           ONLY:msg
+ use parallel_m,    ONLY:master_cpu
  use electrons,     ONLY:levels,spin
  use R_lattice,     ONLY:bz_samp,bz_samp_reset
  use stderr,        ONLY:real2ch
- use QP_m,          ONLY:QP_t
+ use QP_m,          ONLY:QP_t,QP_alloc,QP_reset
  use QP_CTL_m,      ONLY:QP_action,QP_ctl_msg_fmt,QP_ctl_xc_STRING,At_least_one_band_corrected
  use interpolate,   ONLY:NN_n_of_nearest,INTERP_obj,INTERPOLATE_msg_fmt,&
 &                        INTERPOLATION_driver_seed,INTERPOLATION_driver_do,INTERP_shell_factor
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels)  ::en
  type(QP_t)    ::qp
@@ -54,10 +41,13 @@ subroutine QP_apply_interpolate_QP(i_ACTION,bands,en,k,qp)
  ! Work Space
  !
  real(SP)         :: E_diff(n_sp_pol),E_min(n_sp_pol)
- integer          :: ik,ik_fg,iband,i_spin,ID,i_qp,N_exact,N_close,N_far,DB_bands(2)
+ integer          :: ik,ik_fg,iband,i_spin,ID,i_qp,N_exact,N_close,N_far,DB_bands(2),ID_IO,i_err,ic
  logical          :: wrong_width_sign_warn
- character(schlen):: what
+ character(schlen):: what,QP_interpolated_name
  type(bz_samp)    :: QP_k
+ type(QP_t)       :: qp_interpolated
+ !
+ integer,    external    :: io_QP_and_GF
  !
  ! IBZ -> BZ (iku)
  !
@@ -68,6 +58,11 @@ subroutine QP_apply_interpolate_QP(i_ACTION,bands,en,k,qp)
  wrong_width_sign_warn=.false.
  !
  DB_bands=(/minval(qp%table(:,1)),maxval(qp%table(:,1))/)
+ !
+ call QP_reset(qp_interpolated)
+ qp_interpolated%nk=k%nibz
+ qp_interpolated%n_states=(DB_bands(2)-DB_bands(1)+1)*n_sp_pol*k%nibz
+ call QP_alloc(qp_interpolated)
  ! 
  ! Setup
  !
@@ -113,9 +108,13 @@ subroutine QP_apply_interpolate_QP(i_ACTION,bands,en,k,qp)
    N_close=0
    N_far  =0
    !
+   ic=0
    do ik=1,k%nibz
-     do iband=bands(1),bands(2)
+    qp_interpolated%k(ik,:)=k%pt(ik,:)
+    do iband=bands(1),bands(2)
        do i_spin=1,n_sp_pol
+	 !
+         if (DB_bands(1)<=iband .and. iband<=DB_bands(2)) ic=ic+1
          !
          call INTERPOLATION_nearest_E(En%Eo(iband,ik,i_spin),qp,E_diff(i_spin),i_qp,i_spin)
          call QP_transfer_nearest('Stnd_Gd')
@@ -149,6 +148,17 @@ subroutine QP_apply_interpolate_QP(i_ACTION,bands,en,k,qp)
    endif
  endif
  !
+ ! Output
+ !--------
+ !
+ if(master_cpu) then
+   QP_interpolated_name='QP_interpolated'
+   call io_control(ACTION=OP_WR_CL,COM=LOG,SEC=(/1,2,3/),ID=ID_IO)
+   i_err=io_QP_and_GF(trim(QP_interpolated_name),qp_interpolated,ID_IO)
+ endif
+ !          
+ call QP_reset(qp_interpolated)
+ !
  ! Clean
  !
  call k_ibz2bz(k,'d',.false.)
@@ -180,13 +190,16 @@ subroutine QP_apply_interpolate_QP(i_ACTION,bands,en,k,qp)
          !
        case('appl')
          !
+         ic=0
          do ik=1,k%nibz
-           do iband=bands(1),bands(2)
+          qp_interpolated%k(ik,:)=k%pt(ik,:)
+          do iband=bands(1),bands(2)
              !
              if (iband<DB_bands(1)) cycle
              if (iband>DB_bands(2)) cycle
              !
              do i_spin=1,n_sp_pol
+               ic=ic+1
                !
                i_ref=0
                if (QP_action(i_ACTION)%plan(1)) i_ref(2)=n_sp_pol
@@ -194,6 +207,15 @@ subroutine QP_apply_interpolate_QP(i_ACTION,bands,en,k,qp)
                !
                if(QP_action(i_ACTION)%plan(1)) then
                  en%E(iband,ik,i_spin)=en%Eo(iband,ik,i_spin)+INTERP_obj(ID)%INTERP(iband,ik,i_ref(1)+i_spin)
+                 !
+                 qp_interpolated%E_bare(ic)=en%Eo(iband,ik,i_spin)
+                 qp_interpolated%E(ic)=en%E(iband,ik,i_spin)
+                 qp_interpolated%Z(ic)=cZERO
+                 qp_interpolated%table(ic,1)=iband
+                 qp_interpolated%table(ic,2)=iband
+                 qp_interpolated%table(ic,3)=ik
+                 if(n_sp_pol==2) qp_interpolated%table(ic,4)=i_spin
+                 !
                  if(allocated(en%FG%E)) then
                    ik1=k%FGbare%k_range(ik,1)
                    ik2=k%FGbare%k_range(ik,2)
@@ -247,6 +269,17 @@ subroutine QP_apply_interpolate_QP(i_ACTION,bands,en,k,qp)
 &                                                             real(qp%E(i_qp),SP)-qp%E_bare(i_qp)
        At_least_one_band_corrected=.TRUE.
        if(action_kind=="Stnd_Gd") QP_action(i_ACTION)%STATES_done(iband,ik,i_spin)=1
+       !
+       if(action_kind=="Stnd_Gd" .and. DB_bands(1)<=iband .and. iband<=DB_bands(2)) then
+         qp_interpolated%E_bare(ic)=en%Eo(iband,ik,i_spin)
+         qp_interpolated%E(ic)=en%E(iband,ik,i_spin)
+         qp_interpolated%Z(ic)=cZERO
+         qp_interpolated%table(ic,1)=iband
+         qp_interpolated%table(ic,2)=iband
+         qp_interpolated%table(ic,3)=ik
+         if(n_sp_pol==2) qp_interpolated%table(ic,4)=i_spin
+       endif
+       !
      endif
      !
      if (QP_action(i_ACTION)%plan(2)) then
@@ -264,7 +297,9 @@ subroutine QP_apply_interpolate_QP(i_ACTION,bands,en,k,qp)
      !
      if (QP_action(i_ACTION)%plan(3)) then
        if(action_kind=="Stnd_Gd") en%Z(iband,ik,i_spin)=qp%Z(i_qp)
+       !DEBUG>
        !if(action_kind=="Fine_Gd") en%Z_FineGd(iband,ik_fg,i_spin)=qp%Z(i_qp)
+       !DEBUG<
        if(action_kind=="Stnd_Gd") QP_action(i_ACTION)%STATES_done(iband,ik,i_spin)=1
      endif
      !

@@ -1,27 +1,11 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2015 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
+! Authors (see AUTHORS file for details): AM AG GS
 !
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
-!
-integer function io_RIM_W(ID,mode)
+integer function io_RIM_W(ID,mode,Xw)
  !
  use pars,           ONLY:SP
  use R_lattice,      ONLY:RIM_W_ng,RIM_n_rand_pts,RIM_W_is_diagonal,RL_vol,RIM_RL_vol,&
@@ -30,9 +14,12 @@ integer function io_RIM_W(ID,mode)
  use IO_m,           ONLY:io_sec,read_is_on,io_status
  use IO_int,         ONLY:io_connect,io_disconnect,io_header,&
 &                         io_elemental,io_bulk
-#include <memory.h>
+ use frequency,      ONLY:w_samp
+ !
+#include <y_memory.h>
  !
  integer :: ID
+ type(w_samp) :: Xw
  character(3) :: mode
  !
  ! Work Space
@@ -82,17 +69,89 @@ integer function io_RIM_W(ID,mode)
  if (any((/io_sec(ID,:)==2/))) then
    !
    if (read_is_on(ID)) then
-     YAMBO_ALLOC(RIM_W,(nqibz,RIM_W_ng,RIM_W_ng))
+     YAMBO_ALLOC(RIM_W,(Xw%n_freqs,nqibz,RIM_W_ng,RIM_W_ng))
      if(l_PPA_E) YAMBO_ALLOC(RIM_W_E,(RIM_W_ng,RIM_W_ng))
    endif
    !
-   call io_bulk(ID,VAR="RIM_W",VAR_SZ=(/shape(RIM_W)/))
-   call io_bulk(ID,R3=RIM_W)
+   call io_bulk(ID,VAR="RIM_W",VAR_SZ=(/2,Xw%n_freqs,nqibz,RIM_W_ng,RIM_W_ng/))
+   call io_bulk(ID,C4=RIM_W)
    !
    if(l_PPA_E) then
      call io_bulk(ID,VAR="RIM_W_E",VAR_SZ=(/shape(RIM_W_E)/))
      call io_bulk(ID,R2=RIM_W_E)
    end if
+   !
+ endif
+ !
+1 call io_disconnect(ID=ID)
+ !
+end function
+!
+integer function io_RIM_W_aux(ID,Xw)
+ !
+ use pars,           ONLY:SP
+ use R_lattice,      ONLY:f_coeff,RIM_W_ng,RL_vol,nqibz,RIM_id_epsm1_reference,RIM_epsm1,rimw_type
+ use IO_m,           ONLY:io_sec,read_is_on,io_status,write_is_on
+ use IO_int,         ONLY:io_connect,io_disconnect,io_header,io_elemental,io_bulk
+ use frequency,      ONLY:w_samp
+ !
+#include <y_memory.h>
+ !
+ integer :: ID
+ type(w_samp) :: Xw
+ !
+ ! Work Space
+ !
+ real(SP)            ::RL_vol_disk,em1_anis(3)
+ integer             ::RIM_W_ng_disk
+ character(10)       ::anis_on
+ !
+ io_RIM_W_aux=io_connect(desc="RIM_W_aux_func",type=2,ID=ID)
+ !
+ if (io_RIM_W_aux/=0) goto 1
+ !
+ if (any((/io_sec(ID,:)==1/))) then
+   !
+   ! First get the DB version
+   io_RIM_W_aux=io_header(ID,QPTS=.false.,R_LATT=.false.,IMPOSE_SN=.false.,CUTOFF=.true.)
+   if (io_RIM_W_aux/=0) goto 1   
+   !
+   RL_vol_disk=RL_vol
+   !
+   call io_elemental(ID,VAR="PARS",VAR_SZ=10,MENU=0)
+   !
+   call io_elemental(ID,I0=RIM_W_ng,DB_I0=RIM_W_ng_disk,&
+&       VAR=' Screening RL components          :',CHECK=.true.,OP=(/"<="/))
+   !
+   call io_elemental(ID,VAR="",VAR_SZ=0)
+   io_RIM_W_aux=io_status(ID)
+   if (io_RIM_W_aux/=0) goto 1
+ endif
+ !
+ if (any((/io_sec(ID,:)==2/))) then
+   !
+   if (read_is_on(ID)) then
+     YAMBO_ALLOC(f_coeff,(20,RIM_W_ng,RIM_W_ng,nqibz,Xw%n_freqs))
+   endif
+   !
+   !Anisotropy initialization
+   em1_anis=RIM_epsm1(:)-1._SP
+   !
+   anis_on='true'
+   if (RIM_id_epsm1_reference<0.or.RIM_id_epsm1_reference>3) RIM_id_epsm1_reference=0
+   if (RIM_id_epsm1_reference==0) then
+     em1_anis=0._SP
+     anis_on='false'
+   endif
+   !
+   call io_elemental(ID,VAR="RIM_W_type",CH0="",VAR_SZ=1,MENU=0)
+   call io_elemental(ID,CH0=rimw_type,CHECK=.true.,OP=(/"=="/))
+   call io_bulk(ID,VAR="RIM_W_aux_func_coeff",VAR_SZ=(/2,20,RIM_W_ng,RIM_W_ng,nqibz,Xw%n_freqs/))
+   call io_bulk(ID,C5=CMPLX(f_coeff,kind=SP))
+   call io_bulk(ID,VAR="X_anis_coeff",VAR_SZ=(/3/))
+   call io_bulk(ID,R1=em1_anis)
+   call io_elemental(ID,VAR="Anisotropy",CH0="",VAR_SZ=1,MENU=0)
+   call io_elemental(ID,CH0=anis_on,CHECK=.true.,OP=(/"=="/))
    !
  endif
  !

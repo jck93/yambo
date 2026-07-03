@@ -1,11 +1,10 @@
 ! 
 ! Copyright (C) 2004 WanT Group
-! Copyright (C) 2000-2022 the YAMBO team
-! 
-! This file is distributed under the terms of the 
-! GNU General Public License. See the file `License' 
-! in the root directory of the present distribution, 
-! or http://www.gnu.org/copyleft/gpl.txt . 
+! License-Identifier: GPL
+!
+! Copyright (C) 2013 The Yambo Team
+!
+! Authors (see AUTHORS file for details):
 ! 
 ! <INFO>
 !
@@ -96,12 +95,13 @@ MODULE timing_m
      !
      CHARACTER(5)                          :: opr_
      LOGICAL                               :: found
-     INTEGER                               :: index
+     INTEGER                               :: index,ii
      TYPE(clock_list), POINTER  :: listp
      !
 #ifndef _TIMING
      return
 #endif
+
      if (.not.master_thread) return
      !
      IF ( LEN( TRIM(name)) == 0 )  CALL error('timing: Invalid name')
@@ -122,6 +122,12 @@ MODULE timing_m
        !
        IF ( .NOT. PRESENT(opr) .OR. TRIM(opr_) == "start" .OR. TRIM(opr_) == "START") THEN
          opr_ = "start"
+         !print *, "CLOCK LIST NAMES IS : "
+
+         !DO ii = 1,listp%nclock
+          ! print *, listp%clock(ii)%name
+         !END DO
+         !print *, "----> Chosen clock is : ", listp%clock(index)%name
          CALL clock_allocate(TRIM(name), listp%nclock, listp%clock(index))
        ELSE 
          CALL error('timing: Clock NOT found for operation '//TRIM(opr_)//' in '&
@@ -294,9 +300,6 @@ MODULE timing_m
    !
    SUBROUTINE clock_start(obj)
      use LIVE_t, ONLY:cti
-#ifdef _NVTX
-     use nvtx
-#endif
      IMPLICIT NONE
      TYPE(clock), INTENT(inout) :: obj    
      !
@@ -304,16 +307,10 @@ MODULE timing_m
      call cti(obj%start)
      obj%running = .TRUE.
      obj%call_number = obj%call_number + 1
-#ifdef _NVTX
-     call nvtxStartRange(obj%name,obj%indx)
-#endif
    END SUBROUTINE clock_start
    !
    SUBROUTINE clock_stop(obj)
      use LIVE_t, ONLY:cti
-#ifdef _NVTX
-     use nvtx
-#endif
      IMPLICIT NONE
      TYPE(clock), INTENT(inout) :: obj    
      !
@@ -323,9 +320,6 @@ MODULE timing_m
      call cti(obj%stop)
      obj%total_time = obj%total_time + real(obj%stop-obj%start,DP)
      obj%running = .FALSE.
-#ifdef _NVTX
-     call nvtxEndRange()
-#endif
    END SUBROUTINE clock_stop
    !
    SUBROUTINE clock_update(obj)

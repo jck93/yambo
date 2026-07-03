@@ -1,30 +1,14 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): MG, CA
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2015 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): MG CA
 !
 module Overlaps_m
  !
  use pars,  ONLY:SP
-#include<memory.h>
+#include<y_memory.h>
  !
  complex(SP), allocatable :: S_det(:,:)        
  complex(SP), allocatable :: Sm1_plus(:,:,:,:)
@@ -38,13 +22,12 @@ module Overlaps_m
      use X_m,           ONLY:X_t
      use electrons,     ONLY:levels,n_sp_pol
      use R_lattice,     ONLY:nXkbz
-     use matrix_operate,ONLY:mat_c2r,mat_r2c
      !
      implicit none
      type(X_t)   ::X
      type(levels)::Xen
      integer     ::ID
-     complex(SP),  optional :: DIP_S(X%ib(2),X%ib(2),Xen%nk,3,n_sp_pol)
+     complex(SP),  optional :: DIP_S(X%ib(2),X%ib(2),6,Xen%nk,n_sp_pol)
      !
    end function io_Overlaps
      !

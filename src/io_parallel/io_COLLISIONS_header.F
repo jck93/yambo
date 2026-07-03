@@ -1,29 +1,13 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2021 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM CA DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 integer function io_COLLISIONS_header(ID,COLL)
  !
- use pars,          ONLY:schlen,IP
+ use pars,          ONLY:schlen,IP,IP_YIO
  use R_lattice,     ONLY:RIM_ng,RIM_n_rand_pts
  use collision_ext, ONLY:COLLISIONS_cutoff,COLL_bands,COLLISIONS_group,COLLISIONS_CV_only
  use IO_m,          ONLY:io_status,IO_OUTDATED_DB,read_is_on
@@ -36,7 +20,7 @@ integer function io_COLLISIONS_header(ID,COLL)
  use X_m,           ONLY:X_desc
  use drivers,       ONLY:l_elel_scatt,l_elphoton_scatt
  use timing_m,      ONLY:timing
-#include<memory.h>
+#include<y_memory.h>
  !
  integer, intent(inout)            ::ID
  type(COLLISIONS_group)            ::COLL
@@ -116,9 +100,16 @@ integer function io_COLLISIONS_header(ID,COLL)
    if (V_kind_disk>=H_SE_HARTREE) SIZE_=SIZE_+1
    if (V_kind_disk==             H_SE_FOCK.or.V_kind_disk==             H_SE_SEX.or.&
 &        V_kind_disk==H_SE_HARTREE+H_SE_FOCK.or.V_kind_disk==H_SE_HARTREE+H_SE_SEX     ) SIZE_=SIZE_+1
+   if (ver_is_gt_or_eq(ID,revision=24115)) then
+     SIZE_ = SIZE_-1
+     ! COLLISIONS_cutoff is always zero in io_parallel
+   endif
+
    call io_elemental(ID,VAR="HXC_PARAMETERS",VAR_SZ=SIZE_,MENU=0)
-   call io_elemental(ID,R0=COLLISIONS_cutoff,&
-&         VAR='Collisions Cutoff                 ',CHECK=.true.,OP=(/"=="/))
+   if (.not.ver_is_gt_or_eq(ID,revision=24115)) then
+     call io_elemental(ID,R0=COLLISIONS_cutoff,&
+&         VAR='Collisions Cutoff                 ',WARN=.true.,OP=(/"=="/))
+   endif
    !
    if (V_kind_disk>=H_SE_HARTREE) then
      call io_elemental(ID,I0=QP_ng_SH,&
@@ -153,7 +144,7 @@ integer function io_COLLISIONS_header(ID,COLL)
  if (read_is_on(ID).and..not.allocated(COLL%state)) then
    YAMBO_ALLOC(COLL%state,(COLL%N,4))
  endif
- call def_variable_bulk(ID,'COLLISIONS_STATE',1,(/COLL%N,4/),IP+100)
+ call def_variable_bulk(ID,'COLLISIONS_STATE',1,(/COLL%N,4/),IP_YIO)
  call  io_variable_bulk(ID,1,I2=COLL%state)
  !
  io_COLLISIONS_header=io_status(ID)

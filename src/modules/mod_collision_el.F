@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 module collision_el
  !
@@ -30,10 +14,10 @@ module collision_el
  use pars,        ONLY:DP,SP,LP,schlen
  use parallel_m,  ONLY:PP_indexes
  use qe_pseudo_m, ONLY:bec_type,deallocate_bec_type
- use cuda_m,      ONLY:have_cuda
+ use gpu_m,       ONLY:have_gpu
  !
 #include<dev_defs.h>
-#include<memory.h>
+#include<y_memory.h>
  !
  type elemental_collision
    !
@@ -53,6 +37,10 @@ module collision_el
    !
    complex(SP), allocatable :: gamp(:,:)
    complex(SP), allocatable :: rhotw(:)
+   integer :: gamp_nrows
+   integer :: gamp_ncols
+   integer :: gamp_rows(2)
+   integer :: gamp_cols(2)
    !
    ! scatter bamp workspace
    !
@@ -89,6 +77,15 @@ module collision_el
    !
    subroutine elemental_collision_free(ggw)
      type(elemental_collision), target::ggw
+     logical :: l_allocated
+     !
+     l_allocated = allocated(ggw%gamp)
+     !
+     YAMBO_FREE_GPU(DEV_VAR(ggw%gamp))
+     YAMBO_FREE_GPU(DEV_VAR(ggw%rhotw))
+     YAMBO_FREE_GPU(DEV_VAR(ggw%rho_tw_rs))
+     YAMBO_FREE_GPU(DEV_VAR(ggw%WF_symm_i))
+     YAMBO_FREE_GPU(DEV_VAR(ggw%WF_symm_o))
      !
      YAMBO_FREE(ggw%gamp)
      YAMBO_FREE(ggw%rhotw)
@@ -96,13 +93,6 @@ module collision_el
      YAMBO_FREE(ggw%WF_symm_i)
      YAMBO_FREE(ggw%WF_symm_o)
      ! 
-     YAMBO_FREE(ggw%gamp_d)
-     YAMBO_FREE(ggw%rhotw_d)
-     !
-     YAMBO_FREE(ggw%rho_tw_rs_d)
-     YAMBO_FREE(ggw%WF_symm_i_d)
-     YAMBO_FREE(ggw%WF_symm_o_d)
-     !
      ! USPP workspace
      call deallocate_bec_type(ggw%ibec)
      call deallocate_bec_type(ggw%obec)
@@ -112,34 +102,51 @@ module collision_el
      YAMBO_FREE(ggw%becprod)
      YAMBO_FREE(ggw%eiqtau)
      !
+     if (.not.l_allocated) return
+     !
+     !DEV_ACC exit data delete(ggw)
+     !
    end subroutine
    !
-   subroutine elemental_collision_alloc(ggw,NG,NG_GAMP,GRADIENT,TITLE)
+   subroutine elemental_collision_alloc(ggw,NG,GAMP_NG,GAMP_ROWS,GAMP_COLS,&
+&                                       CPU_ONLY,GRADIENT,TITLE)
      use electrons,      ONLY:n_spinor
      use FFT_m,          ONLY:fft_size
      type(elemental_collision), target ::ggw
      integer,         OPTIONAL :: NG
-     integer,         OPTIONAL :: NG_GAMP(2)
+     integer,         OPTIONAL :: GAMP_NG(2)
+     integer,         OPTIONAL :: GAMP_ROWS(2)
+     integer,         OPTIONAL :: GAMP_COLS(2)
+     logical,         OPTIONAL :: CPU_ONLY
      logical,         OPTIONAL :: GRADIENT
      character(*),    OPTIONAL :: TITLE
      !
      integer :: RHOSIZE
+     logical :: CPU_ONLY_
      !
      if (present(TITLE)) then
        ggw%name=TITLE
      endif
      !
-     if (fft_size>0) then
+     CPU_ONLY_=.false.
+     if (present(CPU_ONLY)) CPU_ONLY_=CPU_ONLY
+     !
+     ! workspace
+     !
+     !DEV_ACC enter data copyin(ggw)
+     if (fft_size>0.and..not.allocated(ggw%rho_tw_rs)) then
        YAMBO_ALLOC(ggw%rho_tw_rs,(fft_size))
        YAMBO_ALLOC(ggw%WF_symm_i,(fft_size,n_spinor))
        YAMBO_ALLOC(ggw%WF_symm_o,(fft_size,n_spinor))
        !
-       if (have_cuda) then
-         YAMBO_ALLOC(ggw%rho_tw_rs_d,(fft_size))
-         YAMBO_ALLOC(ggw%WF_symm_i_d,(fft_size,n_spinor))
-         YAMBO_ALLOC(ggw%WF_symm_o_d,(fft_size,n_spinor))
+       if (have_gpu.and..not.CPU_ONLY_) then
+         YAMBO_ALLOC_GPU(DEV_VAR(ggw%rho_tw_rs),(fft_size))
+         YAMBO_ALLOC_GPU(DEV_VAR(ggw%WF_symm_i),(fft_size,n_spinor))
+         YAMBO_ALLOC_GPU(DEV_VAR(ggw%WF_symm_o),(fft_size,n_spinor))
        endif
      endif
+     !
+     ! rhotw
      !
      if (present(NG)) then
        if (NG>0) then
@@ -147,20 +154,37 @@ module collision_el
          if (     present(GRADIENT)) RHOSIZE=3*NG
          if (.not.present(GRADIENT)) RHOSIZE=1*NG
          YAMBO_ALLOC(ggw%rhotw,(RHOSIZE))
-         if (have_cuda) then
-           YAMBO_ALLOC(ggw%rhotw_d,(RHOSIZE))
+         if (have_gpu.and..not.CPU_ONLY_) then
+           YAMBO_ALLOC_GPU(DEV_VAR(ggw%rhotw),(RHOSIZE))
          endif
          !
        endif
        ggw%ngrho=NG
      endif
-     if (present(NG_GAMP)) then
-       if (all((/NG_GAMP>0/))) then
-         YAMBO_ALLOC(ggw%gamp,(NG_GAMP(1),NG_GAMP(2)))
-         if (have_cuda) then
-           YAMBO_ALLOC(ggw%gamp_d,(NG_GAMP(1),NG_GAMP(2)))
-         endif
+     !
+     ! GAMP
+     !
+     if (present(GAMP_NG)) then
+       if (all((/GAMP_NG>0/))) then
+         YAMBO_ALLOC(ggw%gamp,(GAMP_NG(1),GAMP_NG(2)))
        endif
+     endif
+     if (present(GAMP_ROWS).and.present(GAMP_COLS)) then
+       if (present(GAMP_NG)) call error("[COLL] GAMP_NG should not be present")
+       YAMBO_ALLOC(ggw%gamp,(GAMP_ROWS(1):GAMP_ROWS(2),GAMP_COLS(1):GAMP_COLS(2)))
+     endif
+#ifdef _GPU
+     if (have_gpu.and.allocated(ggw%gamp).and..not.CPU_ONLY_) then
+       YAMBO_ALLOC_GPU_MOLD(DEV_VAR(ggw%gamp),ggw%gamp)
+     endif
+#endif
+     if (allocated(ggw%gamp)) then
+       ggw%gamp_rows(1)=lbound(ggw%gamp,1)
+       ggw%gamp_rows(2)=ubound(ggw%gamp,1)
+       ggw%gamp_cols(1)=lbound(ggw%gamp,2)
+       ggw%gamp_cols(2)=ubound(ggw%gamp,2)
+       ggw%gamp_nrows=ggw%gamp_rows(2)-ggw%gamp_rows(1)+1
+       ggw%gamp_ncols=ggw%gamp_cols(2)-ggw%gamp_cols(1)+1
      endif
      !
    end subroutine

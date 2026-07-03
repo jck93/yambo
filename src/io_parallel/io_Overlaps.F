@@ -1,30 +1,14 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2011 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM CA MG DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 integer function io_Overlaps(Dip,ID)
  !
  use pars,          ONLY:schlen,SP
- use DIPOLES,       ONLY:DIPOLE_t,DIP_alloc,DIP_S
+ use DIPOLES,       ONLY:DIPOLE_t,DIP_S
  use R_lattice,     ONLY:nXkbz
  use electrons,     ONLY:n_sp_pol
  use IO_m,          ONLY:io_sec,frag_DIP,read_is_on,io_extension,&
@@ -32,6 +16,7 @@ integer function io_Overlaps(Dip,ID)
  use IO_int,        ONLY:io_connect,io_disconnect,def_variable_bulk,&
 &                        io_variable_bulk,io_header
  use timing_m,      ONLY:timing
+ use ALLOC,         ONLY:DIPOLE_ALLOC_elemental
  !
  implicit none
  type(DIPOLE_t) :: Dip
@@ -40,7 +25,7 @@ integer function io_Overlaps(Dip,ID)
  ! Work Space
  !
  integer :: ik_bz,i_fragment,i_sp_pol,DIP_size(6),DIP_ipos(6),VAR_ID
- integer, external    :: variables_DIPOLES
+ integer, external    :: variables_Overlaps
  character(schlen)    :: VAR_name
  !
  if (.not.io_DIP) then
@@ -72,7 +57,7 @@ integer function io_Overlaps(Dip,ID)
    io_Overlaps=io_header(ID,R_LATT=.true.,WF=.true.,IMPOSE_SN=.true.,TEMP=.true.,FRAG=frag_DIP)
    if (io_Overlaps/=0) goto 1
    !
-   io_Overlaps=variables_DIPOLES(Dip,ID)
+   io_Overlaps=variables_Overlaps(Dip,ID)
    if (io_Overlaps/=0) goto 1
    !
  endif
@@ -82,9 +67,7 @@ integer function io_Overlaps(Dip,ID)
  if (i_fragment==0)               goto 1
  if (i_fragment> n_sp_pol*nXkbz)  goto 1
  !
- ! if (i_fragment>=1) ik_mem=PAR_K_scheme%ibz_index(ik_bz)
- !
- if (read_is_on(ID)) call DIP_alloc('DIP_S',(/Dip%ib(2),Dip%ib(2),6,nXkbz/))
+ if (read_is_on(ID)) call DIPOLE_ALLOC_elemental('DIP_S',(/Dip%ib(2),Dip%ib(2),6,nXkbz/))
  !
  ! Reading size and position
  !

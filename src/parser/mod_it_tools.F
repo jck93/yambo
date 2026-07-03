@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 module it_tools
  !
@@ -103,16 +87,17 @@ module it_tools
    logical function check_verbosity(what)
      use drivers, ONLY:infile_editing
      character(*) :: what
-     if (what=="kpt") check_verbosity=infile_verbosity==V_kpt.or.infile_verbosity==V_all
-     if (what=="RL" ) check_verbosity=infile_verbosity==V_RL.or.infile_verbosity==V_all
-     if (what=="sc" ) check_verbosity=infile_verbosity==V_sc.or.infile_verbosity==V_all
-     if (what=="qp" ) check_verbosity=infile_verbosity==V_qp.or.infile_verbosity==V_all
-     if (what=="io" ) check_verbosity=infile_verbosity==V_io.or.infile_verbosity==V_all
+     if (what=="kpt")       check_verbosity=infile_verbosity==V_kpt.or.infile_verbosity==V_all
+     if (what=="RL" )       check_verbosity=infile_verbosity==V_RL.or.infile_verbosity==V_all
+     if (what=="sc" )       check_verbosity=infile_verbosity==V_sc.or.infile_verbosity==V_all
+     if (what=="qp" )       check_verbosity=infile_verbosity==V_qp.or.infile_verbosity==V_all
+     if (what=="io" )       check_verbosity=infile_verbosity==V_io.or.infile_verbosity==V_all
      if (what=="general"  ) check_verbosity=infile_verbosity==V_general.or.infile_verbosity==V_all
      if (what=="resp"     ) check_verbosity=infile_verbosity==V_resp.or.infile_verbosity==V_all
      if (what=="real_time") check_verbosity=infile_verbosity==V_real_time.or.infile_verbosity==V_all
      if (what=="parallel" ) check_verbosity=infile_verbosity==V_parallel.or.infile_verbosity==V_all
-     if (what=="nl" )      check_verbosity=infile_verbosity==V_nl_optics.or.infile_verbosity==V_all
+     if (what=="nl" )       check_verbosity=infile_verbosity==V_nl_optics.or.infile_verbosity==V_all
+     if (what=="coul" )     check_verbosity=infile_verbosity==V_coul.or.infile_verbosity==V_all
      if (.not.infile_editing) check_verbosity=.TRUE.
    end function
    !
@@ -153,21 +138,21 @@ module it_tools
      enddo
    end function
    !
-   subroutine switch_off_runlevel(off_name,on_name)
+   subroutine switch_off_runlevel(off_name,except)
      use stderr,    ONLY:STRING_split
-     character(*)     :: off_name,on_name
+     character(*)     :: off_name,except
      !
      ! Work Space
      !
-     character(schlen):: on_names(maxrnlvls),off_names(maxrnlvls)
+     character(schlen):: excepts(maxrnlvls),off_names(maxrnlvls)
      integer          :: i2,i3
-     call STRING_split(on_name,on_names)
+     call STRING_split(except,excepts)
      call STRING_split(off_name,off_names)
      ext_loop: do i2=1,nrnlvls
        if (rstatus(i2)==0) cycle
        do i3=1,maxrnlvls
-         if (len_trim(on_names(i3))==0) cycle
-         if (trim(rnlvls(i2,1))==trim(on_names(i3))) cycle ext_loop
+         if (len_trim(excepts(i3))==0) cycle
+         if (trim(rnlvls(i2,1))==trim(excepts(i3))) cycle ext_loop
        enddo
        do i3=1,maxrnlvls
          if (len_trim(off_names(i3))==0) cycle

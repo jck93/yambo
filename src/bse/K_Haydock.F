@@ -1,35 +1,20 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM MG DS IMA
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine K_Haydock(iq,W,OBS,Xk)
  !
  use pars,           ONLY:SP,schlen,cI,cZERO,cONE
  use functions,      ONLY:NAN
+ use R_lattice,      ONLY:q0_def_norm
  use X_m,            ONLY:global_gauge,X_OUTPUT_driver
  use wrapper_omp,    ONLY:V_plus_alpha_V_omp
  use frequency,      ONLY:w_samp
  use com,            ONLY:msg,isec
- use BS_solvers,     ONLY:BSS_desc,Haydock_threshold,io_BSS_Haydock,&
+ use BS_solvers,     ONLY:BSS_desc,Haydock_threshold,io_BSS_Haydock,BSS_kernel_IO_on_the_fly,&
 &                         Haydock_vector,BS_HAYVEC_alloc,BS_HAYVEC_free,Haydock_terminator,Haydock_v0_mod, &
 &                         Haydock_iterIO,Haydock_iterMAX,HAYVEC_size,BSS_uses_DbGd,FG_factor
  use BS,             ONLY:BS_K_Coupling,BS_Blocks_symmetrize_K,BS_T_grp,BS_nT_grps,BS_K_dim,&
@@ -46,7 +31,7 @@ subroutine K_Haydock(iq,W,OBS,Xk)
  use descriptors,    ONLY:IO_desc_add
  use R_lattice,      ONLY:bz_samp
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(w_samp), intent(in) :: W
  integer,      intent(in) :: iq
@@ -89,7 +74,7 @@ subroutine K_Haydock(iq,W,OBS,Xk)
  Haydock_n_converged=0
  Haydock_required_converged=2
  !
- call BS_Blocks_symmetrize_K()
+ if(.not. BSS_kernel_IO_on_the_fly) call BS_blks_symmetrize_K()
  !
  ! Use terminator?
  if (.not.Haydock_terminator) call parser('BSHayTer',Haydock_terminator)
@@ -244,6 +229,7 @@ subroutine K_Haydock(iq,W,OBS,Xk)
    do i_ColFG=1,BS_nkFGbz_in_Tgrp(i_g)
      if (trim(OBS)=="optics")      V0(i_g)%fragment(:,i_ColFG) = BS_T_grp(i_g)%dipoles_opt(1,:,1)
      if (trim(OBS)=="kerr")        V0(i_g)%fragment(:,i_ColFG) = BS_T_grp(i_g)%dipoles_opt(2,:,1)
+     if (trim(OBS)=="dichroism")   V0(i_g)%fragment(:,i_ColFG) = BS_T_grp(i_g)%dipoles_dic(1,:,1)
      if (trim(OBS)=="magnons")     V0(i_g)%fragment(:,i_ColFG) = BS_T_grp(i_g)%dipoles_mag(1,:,1)
      V0(i_g)%fragment(:,i_ColFG) = V0(i_g)%fragment(:,i_ColFG)*sqrt(cmplx(BS_T_grp(i_g)%f_RES,kind=SP))
    enddo
@@ -274,7 +260,7 @@ subroutine K_Haydock(iq,W,OBS,Xk)
 #endif
  enddo
  !
- if(velocity_correction) call K_multiply_by_V(V_tmp,V0,1)
+ if(velocity_correction) call K_multiply_by_V(V_tmp,V0,1,iq,"all")
  !
  if(use_left_and_right) then
    !
@@ -282,9 +268,10 @@ subroutine K_Haydock(iq,W,OBS,Xk)
      if (.not.PAR_IND_T_groups%element_1D(i_g)) cycle
      do i_ColFG=1,BS_nkFGbz_in_Tgrp(i_g)
        if (trim(OBS)=="kerr") W0(i_g)%fragment(:,i_ColFG) = BS_T_grp(i_g)%dipoles_opt(1,:,1)
+       if (trim(OBS)=="dichroism") W0(i_g)%fragment(:,i_ColFG) = BS_T_grp(i_g)%dipoles_opt(1,:,1)/q0_def_norm
        W0(i_g)%fragment(:,i_ColFG) = W0(i_g)%fragment(:,i_ColFG)*(sqrt(cmplx(BS_T_grp(i_g)%f_RES,kind=SP)))
      enddo
-       if(velocity_correction) V_tmp(i_g)%fragment = W0(i_g)%fragment/BS_T_grp(i_g)%E
+     if(velocity_correction) V_tmp(i_g)%fragment = W0(i_g)%fragment/BS_T_grp(i_g)%E
    enddo
    !
    do i_g = 1,BS_nT_grps
@@ -295,7 +282,7 @@ subroutine K_Haydock(iq,W,OBS,Xk)
 #endif
    enddo
    !
-   if(velocity_correction) call K_multiply_by_V(V_tmp,W0,1)
+   if(velocity_correction) call K_multiply_by_V(V_tmp,W0,1,iq,"all")
    !
  endif
  !
@@ -315,7 +302,7 @@ subroutine K_Haydock(iq,W,OBS,Xk)
      !
      Cf= cZERO
      !
-     call K_multiply_by_V(V0,Vnp1,-1)
+     call K_multiply_by_V(V0,Vnp1,-1,iq,"all")
      call K_dot_product(v0_mod_,V0,Vnp1,1)
      !
      ! For the coupling case if A = -R* (l_BS_ares_from_res=.FALSE.), V0 = (u0, -iu0*)
@@ -376,7 +363,7 @@ subroutine K_Haydock(iq,W,OBS,Xk)
      !
      !|Vn+1> = H |Vn>
      !
-     call  K_multiply_by_V(Vn,Vnp1,1)
+     call  K_multiply_by_V(Vn,Vnp1,1,iq,"all")
      !
      ! A(n) = <Vn|Vn+1>
      !
@@ -467,7 +454,7 @@ subroutine K_Haydock(iq,W,OBS,Xk)
      !
      !|Vn+1> = H |Vn>
      !
-     call K_multiply_by_V(Vn,Vnp1,ItParity)
+     call K_multiply_by_V(Vn,Vnp1,ItParity,iq,"all")
      !
      ! B(n+1)= <Vn|F|Vn+1>^(1/2) (that is <Vn|FH|Vn>^(1/2))
      !

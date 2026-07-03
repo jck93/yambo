@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): CA, DS, AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2011 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): CA DS AM
 !
 subroutine INTERPOLATION_BZ_coeff(Xk,VALUEs,engre,nvalues,Nk,ID)
  !
@@ -41,7 +25,7 @@ subroutine INTERPOLATION_BZ_coeff(Xk,VALUEs,engre,nvalues,Nk,ID)
  use parallel_m,        ONLY:PP_indexes,PP_indexes_reset,myid,PAR_build_index,ncpu
  use parallel_int,      ONLY:PP_redux_wait,PARALLEL_index 
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  integer,       intent(in)  :: nvalues
  integer,       intent(in)  :: Nk,ID
@@ -120,13 +104,11 @@ subroutine INTERPOLATION_BZ_coeff(Xk,VALUEs,engre,nvalues,Nk,ID)
  enddo
  !
  YAMBO_ALLOC(BZ_star,(PAR_nshells,Nk))
- BZ_star=cZERO
+ BZ_star=(0._DP,0._DP)
  !
  if (.not.INTERPOLATE_is_quiet) call live_timing("Interpolation@"//trim(INTERP_obj(ID)%what)//" (star)",PAR_nshells)
  !==================================================================================================================
  do i_shell=1,nshells
-   !
-   i_par_shell=SHELL_index(i_shell)
    !
    if (i_shell==1) then
      if (.not.INTERPOLATE_is_quiet) call live_timing(steps=1)
@@ -134,6 +116,7 @@ subroutine INTERPOLATION_BZ_coeff(Xk,VALUEs,engre,nvalues,Nk,ID)
    endif
    !
    if (.not.px%element_1D(i_shell)) cycle
+   i_par_shell=SHELL_index(i_shell)
    !
    call make_star(lattice_vectors(:,i_shell),nsym_interp,int_sop,nstar,star_vec) 
    do ik=1,Nk

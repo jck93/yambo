@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM,AF
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2013 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AMAF
 !
 module openmp
  !
@@ -39,11 +23,13 @@ module openmp
  integer     :: n_threads_FFT   = 0    
  integer     :: n_threads_X     = 0    
  integer     :: n_threads_SE    = 0   
+ integer     :: n_threads_SX    = 0   
  integer     :: n_threads_RT    = 0  
  integer     :: n_threads_DIP   = 0  
  integer     :: n_threads_K     = 0  
  integer     :: n_threads_NL    = 0
  integer     :: n_threads_BZINDX= 0
+ integer     :: n_threads_OSCLL = 0
  integer     :: n_threads_now   = 0
  logical     :: master_thread   = .TRUE.
  !
@@ -83,14 +69,16 @@ module openmp
      !
      n_threads     = 1
      n_threads_limit = 1
-     n_threads_now = 1
-     n_threads_FFT = 0
-     n_threads_X   = 1
-     n_threads_SE  = 1
-     n_threads_RT  = 1
-     n_threads_K   = 1
-     n_threads_DIP = 1
-     n_threads_NL  = 1
+     n_threads_now  = 1
+     n_threads_FFT  = 0
+     n_threads_X    = 1
+     n_threads_SE   = 1
+     n_threads_SX   = 1
+     n_threads_RT   = 1
+     n_threads_K    = 1
+     n_threads_DIP  = 1
+     n_threads_NL   = 1
+     n_threads_OSCLL= 1
      !
      n_out_threads = 1
      n_inn_threads = 1

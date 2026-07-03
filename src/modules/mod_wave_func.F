@@ -1,32 +1,18 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM, DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2006 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AM DS
 !
 module wave_func
  !
  use pars,           ONLY:SP
+ use devxlib,        ONLY:devxlib_mapped
+ use gpu_m,          ONLY:have_gpu
  !
 #include <dev_defs.h>
-#include <memory.h>
+#include <y_memory.h>
  !
  type WAVEs 
    integer              :: b(2)      ! band range 
@@ -71,6 +57,7 @@ module wave_func
  integer                :: wf_ng          ! For WFs in the    IBZ
  integer                :: wf_ng_1st_BZ   ! For WFs in the 1st BZ
  integer                :: wf_ng_overlaps ! For WFs shifted used by the overlaps
+ integer                :: cutoff_ng      ! For G-vectors used in cutoff (if read, may be different from wf_ng)
  !
  ! Wave function derivatives
  !
@@ -94,17 +81,10 @@ module wave_func
  !
  interface
    !
-   integer function io_WF_old(ID,wf_old)
-     use pars,       ONLY: SP
-     integer            :: ID
-     real(SP), optional :: wf_old(:,:,:,:)
-   end function
-   !
-   integer function io_WF(ID,wf,wf_d)
+   integer function io_WF(ID,wf)
      use pars,       ONLY: SP
      integer            :: ID
      complex(SP), optional :: wf(:,:,:)
-     complex(SP), optional DEV_ATTR :: wf_d(:,:,:)
    end function
    !
    function WF_symm(ifft,isc)
@@ -114,7 +94,7 @@ module wave_func
      complex(SP),dimension(n_spinor) :: WF_symm
    end function
    !
-#if defined _CUDA
+#if defined _GPU
    function WF_symm_gpu(ifft,isc)
      use pars,        ONLY: SP
      use electrons,   ONLY: n_spinor
@@ -130,8 +110,11 @@ module wave_func
    subroutine WF_copy(WF_in,WF_out)
      use electrons,  ONLY: n_spinor
      type(WAVEs):: WF_in,WF_out
-     YAMBO_ALLOC(WF_out%c,(size(WF_in%c(:,1,1)),n_spinor,WF_in%N))
+     logical :: lpres
+     !
+     YAMBO_ALLOC_MOLD(WF_out%c,WF_in%c)
      YAMBO_ALLOC(WF_out%index,(WF_in%b(1):WF_in%b(2),WF_in%k(1):WF_in%k(2),WF_in%sp_pol(1):WF_in%sp_pol(2)))
+     !
      WF_out%b      = WF_in%b
      WF_out%k      = WF_in%k
      WF_out%sp_pol = WF_in%sp_pol
@@ -141,9 +124,12 @@ module wave_func
      WF_out%c      = WF_in%c
      WF_out%index  = WF_in%index
      !
-     if (allocated(WF_in%c_d)) then
-        YAMBO_ALLOC_SOURCE(WF_out%c_d,WF_in%c)
+     lpres=have_gpu.and.devxlib_mapped(DEV_VAR(WF_in%c))
+#ifdef _GPU
+     if (lpres) then
+       YAMBO_ALLOC_GPU_SOURCE(DEV_VAR(WF_out%c),WF_in%c)
      endif
+#endif
    end subroutine
    !
    subroutine WF_derivative_alloc(cart_direction)

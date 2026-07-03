@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): CA, AF, AM
+! Copyright (C) 2010 The Yambo Team
 !
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): CA AF AM
 !
 module wrapper_omp
  !
@@ -57,6 +41,10 @@ module wrapper_omp
  !
  interface V_dot_V_omp
    module procedure V_dot_V_r1_omp, V_dot_V_c1_omp, V_dot_V_c2_omp
+ end interface
+ !
+ interface Vstar_dot_V_omp
+   module procedure V_dot_V_r1_omp, Vstar_dot_V_c1_omp, Vstar_dot_V_c2_omp
  end interface
  !
  public :: V_copy_omp
@@ -191,7 +179,7 @@ module wrapper_omp
    end subroutine mv_r_omp
    !
    !=========================
-   ! interface M_plus_alpha_M
+   ! interface M_plus_alpha_M_omp
    !=========================
    !
    subroutine MM_caxpy_omp(N, CA, CX,  CY )
@@ -203,13 +191,13 @@ module wrapper_omp
 #if defined _OPENMP_INT_LINALG 
      integer :: i,j
      if (n_threads_now>1) then
-!$omp parallel do default(shared), private(i,j)
+       !$omp parallel do default(shared), private(i,j)
        do j=1,N
          do i=1,N
            CY(i,j) = CY(i,j) + CA * CX(i,j)
          enddo
        enddo
-!$omp end parallel do
+       !$omp end parallel do
      else
        call MM_caxpy(N, CA, CX,  CY )
      endif
@@ -220,23 +208,23 @@ module wrapper_omp
    end subroutine MM_caxpy_omp
    !
    !=========================
-   ! interface V_plus_alpha_V
+   ! interface V_plus_alpha_V_omp
    !=========================
    !
    subroutine vv_caxpy_omp(N, CA, CX,  CY )
      complex(SP), intent(in) :: CA
      integer,     intent(in) :: N
-     complex(SP), intent(in) :: CX(*)
-     complex(SP), intent(out):: CY(*)
+     complex(SP), intent(in) :: CX(:)
+     complex(SP), intent(out):: CY(:)
      !
 #if defined _OPENMP_INT_LINALG
      integer :: i
      if (n_threads_now>1) then
-!$omp parallel do default(shared), private(i)
+       !$omp parallel do default(shared), private(i)
        do i=1,N
           CY(i) = CY(i) + CA * CX(i)
        enddo
-!$omp end parallel do
+       !$omp end parallel do
      else
        call vv_c(N, CA, CX,  CY )
      endif
@@ -249,17 +237,17 @@ module wrapper_omp
    subroutine vv_saxpy_omp(N, CA, CX, CY )
      real(SP),    intent(in) :: CA
      integer,     intent(in) :: N
-     real(SP),    intent(in) :: CX(*)
-     real(SP),    intent(out):: CY(*)
+     real(SP),    intent(in) :: CX(:)
+     real(SP),    intent(out):: CY(:)
      !
 #if defined _OPENMP_INT_LINALG
      integer :: i
      if (n_threads_now>1) then
-!$omp parallel do default(shared), private(i)
+       !$omp parallel do default(shared), private(i)
        do i=1,N
          CY(i) = CY(i) + CA * CX(i)
        enddo
-!$omp end parallel do
+       !$omp end parallel do
      else
        call vv_s(N, CA, CX,  CY )
      endif
@@ -275,17 +263,17 @@ module wrapper_omp
    !
    subroutine V_copy_omp(N,CX,CY)
      integer,    intent(in)  :: N
-     complex(SP),intent(in)  :: CX(*)
-     complex(SP),intent(out) :: CY(*)
+     complex(SP),intent(in)  :: CX(:)
+     complex(SP),intent(out) :: CY(:)
      !
 #if defined _OPENMP_INT_LINALG
      integer :: i
      if (n_threads_now>1) then
-!$omp parallel do default(shared), private(i)
+       !$omp parallel do default(shared), private(i)
        do i=1,N
          CY(i)=CX(i)
        enddo
-!$omp end parallel do
+       !$omp end parallel do
      else
        call V_copy(N,CX,CY)
      endif
@@ -299,9 +287,9 @@ module wrapper_omp
    ! DOT PRODUCTS
    !==============
    !
-   complex(SP) function Vstar_dot_V_omp(N,CX,CY)
+   complex(SP) function Vstar_dot_V_c1_omp(N,CX,CY)
      integer,    intent(in) :: N
-     complex(SP),intent(in) :: CX(*),CY(*)
+     complex(SP),intent(in) :: CX(:),CY(:)
      !
 #if defined _OPENMP_INT_LINALG
      integer     :: i
@@ -310,22 +298,48 @@ module wrapper_omp
        !$omp parallel do default(shared), private(i), reduction(+:ctmp)
        ctmp=cZERO
        do i=1,N
-         ctmp=ctmp +conjg(CX(i))*CY(i)
+         ctmp=ctmp+conjg(CX(i))*CY(i)
        enddo 
        !$omp end parallel do
-       Vstar_dot_V_omp=ctmp
+       Vstar_dot_V_c1_omp=ctmp
      else
-       Vstar_dot_V_omp=Vstar_dot_V(N,CX,CY)
+       Vstar_dot_V_c1_omp=Vstar_dot_V(N,CX,CY)
      endif
 #else
-     Vstar_dot_V_omp=Vstar_dot_V(N,CX,CY)
+     Vstar_dot_V_c1_omp=Vstar_dot_V(N,CX,CY)
 #endif
      !
-   end function Vstar_dot_V_omp   
+   end function Vstar_dot_V_c1_omp
+   !
+   complex(SP) function Vstar_dot_V_c2_omp(N,CX,CY)
+     integer,    intent(in) :: N
+     complex(SP),intent(in) :: CX(:,:),CY(:,:)
+     !
+#if defined _OPENMP_INT_LINALG
+     integer     :: i,j
+     complex(SP) :: ctmp
+     if (n_threads_now>1) then
+       !$omp parallel do default(shared), private(i,j), reduction(+:ctmp), collapse(2)
+       ctmp=cZERO
+       do j=1,N/size(CX,1)
+         do i=1,size(CX,1)
+           ctmp=ctmp +conjg(CX(i,j))*CY(i,j)
+         enddo 
+       enddo 
+       !$omp end parallel do
+       Vstar_dot_V_c2_omp=ctmp
+     else
+       Vstar_dot_V_c2_omp=Vstar_dot_V(N,CX,CY)
+     endif
+#else
+     Vstar_dot_V_c2_omp=Vstar_dot_V(N,CX,CY)
+#endif
+     !
+   end function Vstar_dot_V_c2_omp
    !
    real(SP) function V_dot_V_r1_omp(N,CX,CY)
      integer, intent(in) :: N
-     real(SP),intent(in) :: CX(*),CY(*)
+     real(SP),intent(in) :: CX(:),CY(:)
      !
 #if defined _OPENMP_INT_LINALG
      integer  :: i
@@ -348,7 +362,7 @@ module wrapper_omp
    !
    complex(SP) function V_dot_V_c1_omp(N,CX,CY)
      integer,    intent(in) :: N
-     complex(SP),intent(in) :: CX(*),CY(*)
+     complex(SP),intent(in) :: CX(:),CY(:)
      !
 #if defined _OPENMP_INT_LINALG
      integer     :: i

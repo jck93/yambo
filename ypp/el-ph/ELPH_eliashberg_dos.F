@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2020 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine ELPH_eliashberg_dos(k,en,q)
  !
@@ -36,14 +20,13 @@ subroutine ELPH_eliashberg_dos(k,en,q)
 &                              GKKP,setup_k_plus_q_levels,use_PH_DbGd
  use IO_int,              ONLY:io_control
  use IO_m,                ONLY:manage_action,OP_RD,RD_CL_IF_END,DUMP,RD_CL,REP
- use interfaces,          ONLY:ELPH_alloc
+ use ALLOC,               ONLY:ELPH_alloc
  use LIVE_t,              ONLY:live_timing
  use parallel_m,          ONLY:PP_indexes,myid
  use parallel_int,        ONLY:PP_redux_wait,PARALLEL_index 
  use functions,           ONLY:Fermi_fnc_derivative
- use stderr,              ONLY:intc
  !
-#include<memory.h>
+#include<y_memory.h>
  type(levels) ::en
  type(bz_samp)::k,q
  !
@@ -138,7 +121,7 @@ subroutine ELPH_eliashberg_dos(k,en,q)
  !
  ! Load double-grid if present
  !
- call io_control(ACTION=OP_RD,COM=REP,MODE=DUMP,SEC=(/1/),ID=ID_DG)
+ call io_control(ACTION=OP_RD,COM=REP,MODE=DUMP,SEC=(/1,2/),ID=ID_DG)
  io_err=io_Double_Grid(PH_freqs,q,ID_DG,'phonons')
  !
  if(io_err==0) then
@@ -170,12 +153,6 @@ subroutine ELPH_eliashberg_dos(k,en,q)
    if (l_eliashberg) io_err=io_ELPH(ID,'gkkp')
    !
    PH_freqs%E(iq,:,1)= sqrt( MAX( PH_freqs_sq(iq,:),0. ) )
-   !
-   if (use_PH_DbGd) then
-      call io_control(ACTION=IO_ACT,SEC=(/iq+1/),ID=ID_DG)
-      io_err=io_Double_Grid(PH_freqs,q,ID_DG,'phonons')
-      if(io_err/=0) call error('Error reading PH-double grid for q-points '//intc(iq))
-   endif
    !
    if (.not.elph_use_q_grid.and.l_eliashberg) call setup_k_plus_q_levels(iq,en%E_Fermi)
    !

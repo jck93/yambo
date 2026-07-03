@@ -1,27 +1,11 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2021 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM MG DS IMA
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
-!
-subroutine K_multiply_by_V_transpose(Vi,Vo,iter_par)
+subroutine K_multiply_by_V_transpose(Vi,Vo,iter_par,iq)
  !
  ! Given K distributed on the processors, and Vi distributed on the processors
  ! multiply Tranpose(K) by Vi.
@@ -35,13 +19,15 @@ subroutine K_multiply_by_V_transpose(Vi,Vo,iter_par)
  use pars,           ONLY:SP,cONE,cZERO,cI
  use parallel_int,   ONLY:PP_redux_wait
  use parallel_m,     ONLY:PAR_IND_T_Haydock,PAR_COM_T_Haydock
- use BS_solvers,     ONLY:Haydock_vector,BSS_Slepc_double_grp
- use BS,             ONLY:BS_nT_grps,BS_blk,n_BS_blks,BS_T_grp,l_BS_ares_from_res
+ use BS_solvers,     ONLY:Haydock_vector,BSS_Slepc_double_grp,BSS_kernel_last_stored_block
+ use BS,             ONLY:BS_nT_grps,BS_blk,n_BS_blks,BS_T_grp,l_BS_ares_from_res,BS_ID
+ use IO_int,         ONLY:io_control
+ use IO_m,           ONLY:RD
  use wrapper,        ONLY:M_by_V
  !
  implicit none
  !
- integer                ::iter_par
+ integer,     intent(in)::iter_par,iq
  type(Haydock_vector)   ::Vi(BS_nT_grps),Vo(BS_nT_grps)
  !
  ! Work Space
@@ -60,6 +46,12 @@ subroutine K_multiply_by_V_transpose(Vi,Vo,iter_par)
    !
    i_Tk  =BS_blk(i_B)%iT_k
    i_Tp  =BS_blk(i_B)%iT_p
+   !
+   if (i_B>BSS_kernel_last_stored_block) then
+     call io_control(ACTION=RD,ID=BS_ID(2))
+     call io_BS_PAR_block(iq,i_B,BS_ID(2),"matonly")
+     call K_block_symmetrize(i_B)
+   endif
    !
    select case(BS_blk(i_B)%mode)
    case("R")
@@ -154,6 +146,8 @@ subroutine K_multiply_by_V_transpose(Vi,Vo,iter_par)
      endif
      !
    end select
+   !
+   if (i_B>BSS_kernel_last_stored_block) call K_block_free(i_B,"matonly")
    !
  end do
  !

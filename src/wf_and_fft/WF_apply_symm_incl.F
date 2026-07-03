@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AF
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 
 !
@@ -27,10 +11,9 @@
 ! WF_apply_symm_cpu
 !====================
 !
-#include<dev_defs_nocuda.h>
-#undef _CUDA_LOC
+#include<dev_defs_nogpu.h>
+#undef _GPU_LOC
 #include"WF_apply_symm.F"
-!
 #include<dev_undefs.h>
 
 !
@@ -38,11 +21,19 @@
 ! WF_apply_symm_gpu 
 !====================
 !
-#if defined _CUDA
-
-#include<dev_defs.h>
-#define _CUDA_LOC
-#include"WF_apply_symm.F"
-
+! This includes a host-fallback when GPUs are not
+! available
+!
+#if defined _GPU
+#  include<dev_defs.h>
+#  define _GPU_LOC
+#  include"WF_apply_symm.F"
+#else
+#  include<dev_defs_nogpu.h>
+#  undef _GPU_LOC
+#  undef  DEV_SUB
+#  define DEV_SUB(x)        CAT(x,_gpu)
+#  include"WF_apply_symm.F"
+#  include<dev_undefs.h>
 #endif
 

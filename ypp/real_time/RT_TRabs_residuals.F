@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2021 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): DS AM
-!
-! This file is distributed under the terms of the GNU
-! General Public License. You can redistribute it and/or
-! modify it under the terms of the GNU General Public
-! License as published by the Free Software Foundation;
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will
-! be useful, but WITHOUT ANY WARRANTY; without even the
-! implied warranty of MERCHANTABILITY or FITNESS FOR A
-! PARTICULAR PURPOSE.  See the GNU General Public License
-! for more details.
-!
-! You should have received a copy of the GNU General Public
-! License along with this program; if not, write to the Free
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine RT_TRabs_residuals(what,N_trans,N_dirs,DIP_dir,Xen,Xk,nb,l_EQ)
  !
@@ -27,7 +11,6 @@ subroutine RT_TRabs_residuals(what,N_trans,N_dirs,DIP_dir,Xen,Xk,nb,l_EQ)
  use R_lattice,       ONLY:bz_samp
  use electrons,       ONLY:levels,n_sp_pol,spin,spin_occ
  use X_m,             ONLY:global_gauge
- use DIPOLES,         ONLY:DIP_rotated
  use YPP_real_time,   ONLY:TRabs_RES_left,TRabs_RES_right,TRabs_E,TRabs_Eeh_treshold
  use BS,              ONLY:BS_K_dim
  use BS_solvers,      ONLY:BSS_eh_table,BS_mat
@@ -35,7 +18,7 @@ subroutine RT_TRabs_residuals(what,N_trans,N_dirs,DIP_dir,Xen,Xk,nb,l_EQ)
  use real_time,       ONLY:RT_bands
  use parallel_m,      ONLY:PAR_IND_DIPk_ibz,PAR_IND_VAL_BANDS_DIP,PAR_IND_CON_BANDS_DIP
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  character(*)      :: what
  integer           :: N_trans,nb(2),N_dirs
@@ -48,7 +31,7 @@ subroutine RT_TRabs_residuals(what,N_trans,N_dirs,DIP_dir,Xen,Xk,nb,l_EQ)
  !
  integer           :: i_lp,i_v,i_c,i_kbz,i_kibz,i_spin,i_l,bands(2,2),i_n,i_np,i_dir
  real(SP)          :: E_eh
- complex(SP)       :: dipole_rotated(3),f_eh(2),DIP_dot
+ complex(SP)       :: DIP_rotated(3),f_eh(2),DIP_dot,DIP(3)
  !
  ! BSE residuals
  ! -------------
@@ -71,11 +54,12 @@ subroutine RT_TRabs_residuals(what,N_trans,N_dirs,DIP_dir,Xen,Xk,nb,l_EQ)
        if (.not. PAR_IND_DIPk_ibz%element_1D(i_kibz)) cycle
        !
        f_eh=gimme_f_and_delta_f(i_v,i_c,i_kibz,i_spin)
-       dipole_rotated=conjg(-cI*DIP_rotated(i_c,i_v,i_kbz,i_spin,"DIP_iR",Xk))
+       call DIPOLE_rotate(i_c,i_v,i_kbz,i_spin,"DIP_iR",Xk,DIP)
+       DIP_rotated=conjg(-cI*DIP)
        !
        do i_dir=1,N_dirs
          !
-         DIP_dot=dot_product(DIP_dir(i_dir,:),dipole_rotated)
+         DIP_dot=dot_product(DIP_dir(i_dir,:),DIP_rotated)
          !
          TRabs_RES_right(i_l,i_dir,1)= TRabs_RES_right(i_l,i_dir,1)+&
 &                                      conjg(DIP_dot)*BS_mat(i_lp,i_l)*sqrt(f_eh(1))
@@ -137,11 +121,12 @@ subroutine RT_TRabs_residuals(what,N_trans,N_dirs,DIP_dir,Xen,Xk,nb,l_EQ)
            if (.not. PAR_IND_VAL_BANDS_DIP%element_1D(i_n)) cycle
            !
            TRabs_E(N_trans)=E_eh
-           dipole_rotated=conjg(-cI*DIP_rotated(i_np,i_n,i_kbz,i_spin,"DIP_iR",Xk))
+           call DIPOLE_rotate(i_np,i_n,i_kbz,i_spin,"DIP_iR",Xk,DIP)
+           DIP_rotated=conjg(-cI*DIP)
            !
            do i_dir=1,N_dirs
-             TRabs_RES_right(N_trans,i_dir,1)= conjg(dot_product(DIP_dir(i_dir,:),dipole_rotated))*sqrt(f_eh(2))
-             TRabs_RES_left(N_trans,i_dir,1) =       dot_product(DIP_dir(i_dir,:),dipole_rotated) *sqrt(f_eh(2))
+             TRabs_RES_right(N_trans,i_dir,1)= conjg(dot_product(DIP_dir(i_dir,:),DIP_rotated))*sqrt(f_eh(2))
+             TRabs_RES_left(N_trans,i_dir,1) =       dot_product(DIP_dir(i_dir,:),DIP_rotated) *sqrt(f_eh(2))
            enddo
            !
          enddo

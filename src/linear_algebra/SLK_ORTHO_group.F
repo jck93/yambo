@@ -1,14 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM, AF
+! Copyright (C) 2016 The Yambo Team
 !
-! Copyright (C) 2001-2007 Quantum-ESPRESSO group
-! This file is distributed under the terms of the
-! GNU General Public License. See the file `License'
-! in the root directory of the present distribution,
-! or http://www.gnu.org/copyleft/gpl.txt .
+! Authors (see AUTHORS file for details): AM AF
 !
 subroutine SLK_ORTHO_group( ORTHO, POOL, nproc_try_in, comm_all )
  !
@@ -58,6 +53,7 @@ subroutine SLK_ORTHO_group( ORTHO, POOL, nproc_try_in, comm_all )
  !  in the ortho group for parallel linear algebra
  !
  ORTHO%n_CPU = ORTHO%grid(1) * ORTHO%grid(2)
+
  !
  IF( nproc_all >= 4*ORTHO%n_CPU ) THEN
    !

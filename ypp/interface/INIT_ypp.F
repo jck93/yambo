@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2015 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine INIT_ypp(E,instr,FINALIZE)
  !
@@ -33,7 +17,6 @@ subroutine INIT_ypp(E,instr,FINALIZE)
 &                         U_k_pts,U_interp_pts,U_q_pts,U_q_shifts,FineGd_DB1_paths,l_angular_momentum,l_position,&
 &                         l_QP_DB_expand,l_average_eh,l_interp,l_regular_grid,DIPs
  use pars,           ONLY:pi,schlen
- use D_lattice,      ONLY:i_time_rev
  use it_tools,       ONLY:ofiles_append,infile_dump,runlevel_is_on
  use it_m,           ONLY:initdefs,initmode,infile,nrnlvls,rnlvls,infile_verbosity,&
                           V_general,V_qp,V_all,V_real_time,V_nl_optics
@@ -67,7 +50,8 @@ subroutine INIT_ypp(E,instr,FINALIZE)
  use pars,           ONLY:SP
 #endif
 #if defined _YPP_ELPH
- use YPP_ELPH
+ use YPP_ELPH,       ONLY:l_phonons,l_atomic_amplitude,l_eliashberg,l_gkkp,l_gkkp_db,l_gkkp_dg,l_gkkp_plot,&
+&                         l_ph_ass_dos,l_phonons
 #endif
 #if defined _YAML_OUTPUT
  use pars,           ONLY:logfile_index,repfile_index
@@ -75,7 +59,7 @@ subroutine INIT_ypp(E,instr,FINALIZE)
  use yaml_output,    ONLY:yaml_close_stream
 #endif
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels)     ::E
  character(*)     ::instr
@@ -370,7 +354,6 @@ subroutine INIT_ypp(E,instr,FINALIZE)
 #if defined _YPP_RT
  !
  if (l_RT_X)           call initactivate(1,'RT_X')
- !
  if (l_RT_abs)         call initactivate(1,'RTabs')
  if (l_RT_occupations) call initactivate(1,'RToccupations')
  if (l_RT_lifetimes)   call initactivate(1,'RTlifetimes')
@@ -400,6 +383,7 @@ subroutine INIT_ypp(E,instr,FINALIZE)
  if (l_ph_ass_dos)        call initactivate(1,'ph_ass_dos')
  !
 #endif
+ !
 #if defined _YPP_SC
  !
  if (l_angular_momentum) call initactivate(1,'angular_m')
@@ -435,6 +419,7 @@ subroutine INIT_ypp(E,instr,FINALIZE)
  l_q_grid    = runlevel_is_on('Q_grid')
  l_shifted_grid = runlevel_is_on('Shifted_Grid')
  l_random_grid  = runlevel_is_on('Random_Grid')
+ l_regular_grid = runlevel_is_on('Regular_Grid')
  l_high_sym_pts = runlevel_is_on('High_Symm')
  l_dos       =runlevel_is_on('dos')
  l_bands     =runlevel_is_on('bnds')
@@ -535,8 +520,6 @@ subroutine INIT_ypp(E,instr,FINALIZE)
 #if defined _YPP_SC
  if (l_mean_potential) call initactivate(1,"PotValue")
 #endif
- !
- if (l_fix_syms.and.n_spinor==2.and.i_time_rev==0) call initactivate(1,"ExpandSymm")
  !
  if (l_fix_syms) call initactivate(1,"Efield1 Efield2 BField Bpsi Btheta RmAllSymm RmTimeRev RmSpaceInv GvecsCut KeepKGrid")
  !
@@ -711,7 +694,7 @@ subroutine INIT_ypp(E,instr,FINALIZE)
 #if defined _YPP_ELPH
    if (l_ph_ass_dos) then
      call initactivate(-1,"BSQindex")
-     call initactivate(1,"PHfreqF PHmodeF DOSERange DOSESteps DOS_broad")
+     call initactivate(1,"ElPhModes PHfreqF PHmodeF DOSERange DOSESteps DOS_broad")
      call initactivate(2,"BoseTemp")
    endif
 #endif
@@ -763,14 +746,14 @@ subroutine INIT_ypp(E,instr,FINALIZE)
  l_flag=l_flag.or.l_RT_bands.or.l_RT_G_two_times
 #endif
  !
- if (l_flag) call USER_vector_handle("BANDS_kpts")
+ if (l_flag) call USER_vector_handle("BANDS_kpts",3)
  !
  if (l_bz_grids) then
-   if (l_k_grid)       call USER_vector_handle("GWKpts")
-   if (l_q_grid)       call USER_vector_handle("Qpts")
-   if (l_shifted_grid) call USER_vector_handle("KShift")
+   if (l_k_grid)       call USER_vector_handle("GWKpts",3)
+   if (l_q_grid)       call USER_vector_handle("Qpts",3)
+   if (l_shifted_grid) call USER_vector_handle("KShift",3)
  endif
- if (l_interp)         call USER_vector_handle("BANDS_kpts")
+ if (l_interp)         call USER_vector_handle("BANDS_kpts",3)
  !
  if (l_map_kpts) then
    call PARSER_array(mode="CH dimensions",VAR="FineGd_DB1_paths",N=n_FineGd_DBs,M=1)
@@ -784,14 +767,6 @@ subroutine INIT_ypp(E,instr,FINALIZE)
 &                    N=n_FineGd_DBs,M=1,CH_v=FineGd_DB1_paths(:n_FineGd_DBs,:))
  endif
  !
- ! LOG/REP files
- !
- live_timing_is_on =master_cpu.and..not.infile_editing
- write_to_report   =master_cpu.and..not.infile_editing
- write_to_log      =master_cpu.and..not.infile_editing
- !
- call INIT_report_and_log_files()
- !
  ! Input file
  !
  if (infile_editing) then
@@ -799,7 +774,16 @@ subroutine INIT_ypp(E,instr,FINALIZE)
    call initinfio(defs,inpfile_unit)
    close(inpfile_unit)
    call PP_wait()
+   return
  endif
+ !
+ ! LOG/REP files
+ !
+ live_timing_is_on =master_cpu.and..not.infile_editing
+ write_to_report   =master_cpu.and..not.infile_editing
+ write_to_log      =master_cpu.and..not.infile_editing
+ !
+ call INIT_report_and_log_files()
  !
  contains
    !
@@ -830,28 +814,27 @@ subroutine INIT_ypp(E,instr,FINALIZE)
      !
    end subroutine
    !
-   subroutine USER_vector_handle(field)
+   subroutine USER_vector_handle(field,M)
      !
      use parser_m,       ONLY:PARSER_array
      !
      character(*)::field
+     integer     ::M,N,nq_s
      !
-     integer     ::nk,nq_s
-     !
-     call PARSER_array(mode="REAL dimensions",VAR=field,N=nk,M=3)
+     call PARSER_array(mode="REAL dimensions",VAR=field,N=N,M=M)
      !
      if (field=="GWKpts") then
-       if (nk> 0) n_u_k_pts=nk
-       if (nk==0) n_u_k_pts=1
+       if (N> 0) n_u_k_pts=N
+       if (N==0) n_u_k_pts=1
        YAMBO_ALLOC(U_k_pts,(n_u_k_pts,3))
-       if (nk> 0) call PARSER_array(mode="read",VAR=field,N=nk,M=3,R_v=U_k_pts)
-       if (nk==0) U_k_pts=0.
+       if (N> 0) call PARSER_array(mode="read",VAR=field,N=N,M=3,R_v=U_k_pts)
+       if (N==0) U_k_pts=0.
        call PARSER_array(mode="write",VAR=field,DESC='K points list',N=n_u_k_pts,M=3,R_v=U_k_pts)
      else if (field=="BANDS_kpts") then
-       if (nk> 0) then 
-         n_u_interp_pts=nk
+       if (N> 0) then 
+         n_u_interp_pts=N
          YAMBO_ALLOC(U_interp_pts,(n_u_interp_pts,3))
-         call PARSER_array(mode="read",VAR=field,N=nk,M=3,R_v=U_interp_pts)
+         call PARSER_array(mode="read",VAR=field,N=N,M=3,R_v=U_interp_pts)
          call PARSER_array(mode="write",VAR=field,DESC='K points of the bands circuit',&
 &                          N=n_u_interp_pts,M=3,R_v=U_interp_pts)
        else
@@ -859,16 +842,16 @@ subroutine INIT_ypp(E,instr,FINALIZE)
          call PARSER_array(mode="write",VAR=field,DESC='K points of the bands circuit',N=0,M=3)
        endif
      else if (field=="Qpts") then
-       if (nk> 0) n_u_q_pts=nk
-       if (nk==0) n_u_q_pts=1
+       if (N> 0) n_u_q_pts=N
+       if (N==0) n_u_q_pts=1
        YAMBO_ALLOC(U_q_pts,(n_u_q_pts,3))
-       if (nk> 0) call PARSER_array(mode="read",VAR=field,N=nk,M=3,R_v=U_q_pts)
-       if (nk==0) U_q_pts=0.
+       if (N> 0) call PARSER_array(mode="read",VAR=field,N=N,M=3,R_v=U_q_pts)
+       if (N==0) U_q_pts=0.
        call PARSER_array(mode="write",VAR=field,DESC='Q points list',&
 &                        N=n_u_q_pts,M=3,R_v=U_q_pts)
      else if (field=="KShift") then
        U_q_shifts=0.
-       if (nk> 0) call PARSER_array(mode="read",VAR=field,N=min(nk,3),M=3,R_v=U_q_shifts)
+       if (N> 0) call PARSER_array(mode="read",VAR=field,N=min(N,3),M=3,R_v=U_q_shifts)
        call PARSER_array(mode="write",VAR=field,DESC='K-grid shifts (max 3)',&
 &                        N=3,M=3,R_v=U_q_shifts)
      endif

@@ -1,27 +1,25 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2010 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): DS
 !
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
-!
 subroutine Pseudo_Hamiltonian(Xk,Xen,l_equilibrium)
+ !
+ ! This subroutine computes the non local part of the pseudo potential V^nl using the KB form factors.
+ ! If l_equilibrium=.true. it returns V^nl_{nmk}= <nk | V^nl(r,r') | mk>
+ ! If l_equilibrium=.false. it returns V^nl_{nmk}(A)= <nk | V^nl(r,r') exp(i\int_r^r'A(x) dx) | mk>
+ !
+ ! This is used in (i) yambo_sc in presence of a magnetic field, and 
+ !                 (ii) yambo_rt when switching to the velocity gauge
+ ! See also:
+ ! (i)  eq(10) in Phys. Rev. Lett. 91, 196401 (2003), last term
+ ! (ii) eq.(32) in Phys. Chem. Chem. Phys. 17, 31371 (2015)
+ !
+ ! In the future this subroutine should be compared and eventually interated /
+ ! merged with the new coding done by FP in the subroutine Bare_Hamiltonina_from_scratch
+ ! (presently under development), which is able to construct both V^nl and V^loc
  !
  use pars,          ONLY:SP,cZERO
  use drivers,       ONLY:l_sc_magnetic,l_real_time
@@ -48,7 +46,7 @@ subroutine Pseudo_Hamiltonian(Xk,Xen,l_equilibrium)
  use real_time,     ONLY:Ho_plus_sigma,H_pseudo_eq
 #endif
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(bz_samp) :: Xk
  type(levels)  :: Xen

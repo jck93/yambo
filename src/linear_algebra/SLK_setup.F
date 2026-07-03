@@ -1,31 +1,15 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM, AF
+! Copyright (C) 2006 The Yambo Team
 !
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): AM AF
 !
 subroutine SLK_setup( idriver, ncpu_in_use, ORTHO, POOL, COMM, INDEX_comm, slk_error)
  !
  use SLK_m,          ONLY:n_pools,ORTHO_group,POOL_group,SLK_POOL_init
  use parallel_m,     ONLY:yMPI_comm
- use linear_algebra, ONLY:INV,DIAGO,LIN_SYS,MAT_MUL
+ use linear_algebra, ONLY:INV,DIAGO,DIAGX,LIN_SYS,MAT_MUL
  use com,            ONLY:msg
  !
  IMPLICIT NONE
@@ -62,6 +46,7 @@ subroutine SLK_setup( idriver, ncpu_in_use, ORTHO, POOL, COMM, INDEX_comm, slk_e
  !
  if (idriver==INV)     ch="Inversion"
  if (idriver==DIAGO)   ch="Digonalization"
+ if (idriver==DIAGX)   ch="Few Eigenvalues"
  if (idriver==LIN_SYS) ch="LinearSystem"
  if (idriver==MAT_MUL) ch="MatrixMult."
  !

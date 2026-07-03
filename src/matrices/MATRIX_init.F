@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2016 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine MATRIX_init( what, M_par, N, Nb)
  !
@@ -36,12 +20,14 @@ subroutine MATRIX_init( what, M_par, N, Nb)
  use pars,           ONLY:SP
  use matrix,         ONLY:PAR_matrix,MATRIX_reset
  use parallel_m,     ONLY:COMM_copy,PAR_COM_SLK,PAR_COM_SLK_INDEX_local,&
-&                         PAR_COM_RL_INDEX,PAR_COM_RL_A2A,ncpu
-#include <memory.h>
+&                         PAR_COM_SLK_INDEX_global,PAR_COM_RL_INDEX,PAR_COM_RL_A2A,ncpu
+ use SLK_m,          ONLY:SLK_ORTHO
+#include <dev_defs.h>
+#include <y_memory.h>
  !
  character(*)           :: what
  type(PAR_matrix)       :: M_par
- integer                :: N,Nb
+ integer                :: N,Nb,ierr
  !
  ! Work Space
  !
@@ -49,13 +35,14 @@ subroutine MATRIX_init( what, M_par, N, Nb)
  integer, allocatable :: rows(:,:),cols(:,:)
  !
  call MATRIX_reset(M_par)
+ !DEV_ACC enter data copyin(M_par)
  !
  ! COMMs
  !
  if (what=="SLK") then
    call COMM_copy(PAR_COM_SLK_INDEX_local, M_par%INTRA_comm)
    call COMM_copy(PAR_COM_SLK,             M_par%INTER_comm)
- else if (what=="XUP".or.what=="XDN".or.what=="X") then
+ else if (what=="XUP".or.what=="XDN".or.what=="X".or.what=="MPA") then
    call COMM_copy(PAR_COM_RL_A2A,   M_par%INTRA_comm)
    call COMM_copy(PAR_COM_RL_INDEX, M_par%INTER_comm)
  endif
@@ -111,7 +98,7 @@ subroutine MATRIX_init( what, M_par, N, Nb)
  !
  ! Entire Matrix
  !
- if (what=="X".or.what=="PAR") then
+ if (what=="X".or.what=="PAR".or.what=="MPA") then
    !
    M_par%I     = 1
    M_par%Nb    = Nb

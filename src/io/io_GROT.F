@@ -1,38 +1,23 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2015 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+#include<dev_defs.h>
 !
 integer function io_GROT(io_db)
  !
  use D_lattice,      ONLY:nsym,inv_index
- use R_lattice,      ONLY:n_g_shells,ng_closed,ng_in_shell,E_of_shell,g_rot,&
-                          minus_G,minus_G_d
+ use R_lattice,      ONLY:n_g_shells,ng_closed,ng_in_shell,E_of_shell,g_rot,minus_G
+ use R_lattice,      ONLY:DEV_VAR(g_rot),DEV_VAR(minus_G)
  use IO_m,           ONLY:io_status,io_sec,read_is_on
  use IO_int,         ONLY:io_connect,io_disconnect,io_elemental,&
 &                         io_bulk,io_header,ver_is_gt_or_eq
  use timing_m,       ONLY:timing
- use cuda_m,         ONLY:have_cuda
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  integer :: io_db,nsym_db
  !
@@ -81,12 +66,15 @@ integer function io_GROT(io_db)
    call io_bulk(io_db,VAR="minusG",VAR_SZ=(/ng_closed/))
    call io_bulk(io_db,I1=minus_G(:ng_closed))
  endif
- if (have_cuda) then
-   if (read_is_on(io_db).and.inv_index<0) then
-     YAMBO_FREE(minus_G_d)
-     YAMBO_ALLOC_SOURCE(minus_G_d,minus_G)
+ !
+#ifdef _GPU
+ if (read_is_on(io_db)) then
+   YAMBO_ALLOC_GPU_SOURCE(DEV_VAR(g_rot),g_rot)
+   if (inv_index<0) then
+     YAMBO_ALLOC_GPU_SOURCE(DEV_VAR(minus_G),minus_G)
    endif
  endif
+#endif
  !
  call initactivate(1,'Gmode')
  !

@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM IMA
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine K_solvers(iq,Ken,Xk,q,X_static,W_bss)
  !
@@ -28,12 +12,10 @@ subroutine K_solvers(iq,Ken,Xk,q,X_static,W_bss)
  use electrons,      ONLY:levels
  use R_lattice,      ONLY:bz_samp
  use X_m,            ONLY:X_t
- use BS_solvers,     ONLY:BSS_desc,BSS_free,BS_mat,run_Haydock,run_inversion,run_Diago
-#if defined _SLEPC && !defined _NL
- use BS_solvers,     ONLY:run_Slepc
-#endif
- use BS,             ONLY:BS_K_has_been_calculated_loaded,&
-&                         BS_blks_free,l_BS_abs,l_BS_kerr,l_BS_magnons
+ use BS_solvers,     ONLY:BSS_desc,BSS_free,BS_mat,run_Haydock,&
+&                         run_inversion,run_Diago,run_Diagx,run_Chase,run_Slepc,BSS_kernel_IO_on_the_fly
+ use BS,             ONLY:BS_K_has_been_calculated_loaded,BS_ID,&
+&                         l_BS_abs,l_BS_kerr,l_BS_magnons,l_BS_dichroism
  use parallel_m,     ONLY:master_cpu,CPU_structure
  use IO_int,         ONLY:IO_and_Messaging_switch
  use linear_algebra, ONLY:INV,DIAGO
@@ -41,7 +23,7 @@ subroutine K_solvers(iq,Ken,Xk,q,X_static,W_bss)
  use MAGNONS,        ONLY:BSS_MAGN_free
  use DICHROISM,      ONLY:BSS_DICH_free
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels) ::Ken
  type(bz_samp)::Xk,q
@@ -49,9 +31,13 @@ subroutine K_solvers(iq,Ken,Xk,q,X_static,W_bss)
  type(w_samp) ::W_bss
  integer      ::iq
  !
- ! Check first if the BS database has been calculated/loaded in K.F
+ logical :: l_partial_kernel_loaded
  !
- if (.not. BS_K_has_been_calculated_loaded ) return
+ ! If the BS database was not loaded in memory, call K_restart
+ !
+ if (.not. BS_K_has_been_calculated_loaded ) call K_restart(iq,X_static,BS_ID(1),BS_ID(2),BS_ID(3),l_partial_kernel_loaded)
+ !
+ if (.not. BS_K_has_been_calculated_loaded ) call error("Something went wrong in K_restart, cannot proceed with solver")
  !
  call section('-','BSE solver(s) @q'//trim(intc(iq)))
  !
@@ -70,7 +56,7 @@ subroutine K_solvers(iq,Ken,Xk,q,X_static,W_bss)
  !
  ! Diagonalization
  !
- if (run_Diago) then 
+ if (run_Diago .or. run_Diagx .or. run_Chase) then 
    !
    call PARALLEL_assign_LA_COMMs("Response_T_space",DIAGO,CPU_structure(4)%nCPU_lin_algebra_DIAGO)
    !
@@ -78,9 +64,7 @@ subroutine K_solvers(iq,Ken,Xk,q,X_static,W_bss)
    !
  endif
  !
-#if defined _SLEPC && !defined _NL
  if (run_Slepc) call K_diago_driver(iq,W_bss,X_static)
-#endif
  !
  ! Inversion
  !
@@ -115,12 +99,14 @@ subroutine K_solvers(iq,Ken,Xk,q,X_static,W_bss)
    ! The jdos (l_BS_jdos) cannot be computed easely via the Haydock solver.
    ! it could be obtained as the average of N calls to K_Haydock
    ! with random intial vectors. See https://doi.org/10.1002/nla.2170
+   !
    ! A possible alternative could be to use the algorithm with Cf
    ! from both the left and the right hand side to get from a single Haydock loop
    !
    if (l_BS_abs)     call K_Haydock(iq,W_bss,"optics",Xk)
    if (l_BS_kerr)    call K_Haydock(iq,W_bss,"kerr",Xk)
    if (l_BS_magnons) call K_Haydock(iq,W_bss,"magnons",Xk)
+   if (l_BS_dichroism) call K_Haydock(iq,W_bss,"dichroism",Xk)
    !
  endif
  !

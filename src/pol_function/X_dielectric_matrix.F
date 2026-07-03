@@ -1,63 +1,49 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): AM, DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2006 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
+! Authors (see AUTHORS file for details): AM DS
 !
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
-!
-integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
+integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE,CHILD)
  ! 
  ! Calculates and stores on file the dielectric matrix.
  !
- use pars,          ONLY:SP,schlen
+ use pars,          ONLY:SP,schlen,cI
  use drivers,       ONLY:l_alda_fxc,l_gw0,l_life,l_rpa_IP 
- use DIPOLES,       ONLY:DIPOLE_t,DIP_alloc
- use X_m,           ONLY:X_t,X_ALLOC_elemental,self_detect_E_range,X_poles,l_recalculate_X,l_write_disk_Xo,&
-&                        l_X_terminator,X_terminator_Kind,X_mat,X_par,X_par_lower_triangle,&
+ use DIPOLES,       ONLY:DIPOLE_t
+ use ALLOC,         ONLY:X_ALLOC_elemental,DIPOLE_ALLOC_global
+ use X_m,           ONLY:X_t,self_detect_E_range,X_poles,l_recalculate_X,l_write_disk_Xo,&
+&                        l_X_terminator,X_terminator_Kind,X_mat,X_par,&
 &                        X_DbGd_nkpt_at_q,use_X_DbGd,X_DbGd_nkpt_at_q_table,X_Double_Grid_setup,&
 &                        n_OPTICAL_dir_to_eval,X_par_average
  use LIVE_t,        ONLY:live_timing
  use stderr,        ONLY:intc
  use frequency,     ONLY:w_samp
- use R_lattice,     ONLY:bz_samp,nqibz
- use electrons,     ONLY:levels
+ use R_lattice,     ONLY:bz_samp,nqibz,l_Dirac,Dirac_v_f
+ use electrons,     ONLY:levels,n_sp_pol
  use parallel_int,  ONLY:PP_wait,PARALLEL_global_indexes,PARALLEL_WF_distribute,PARALLEL_WF_index
  use parallel_m,    ONLY:PAR_IND_Q_ibz,PAR_Q_ibz_index,PAR_nQ_ibz,PAR_COM_X_WORLD,&
 &                        PAR_IND_Xk_ibz,PAR_IND_CON_BANDS_X,PAR_IND_VAL_BANDS_X
  use wave_func,     ONLY:WF_buffered_IO,WF,WF_buffer
  use IO_int,        ONLY:io_control,IO_and_Messaging_switch
- use IO_m,          ONLY:OP_RD_CL,OP_APP_CL,VERIFY,REP,io_RESPONSE
- use com,           ONLY:depth
+ use IO_m,          ONLY:OP_RD_CL,OP_APP_CL,VERIFY,REP,io_RESPONSE,OP_WR_CL
+ use com,           ONLY:depth,msg
  use TDDFT,         ONLY:F_xc_gspace
  use interfaces,    ONLY:WF_load,WF_free
  use QP_m,          ONLY:QP_n_W_freqs_redux
  use matrix,        ONLY:MATRIX_reset,MATRIX_copy
  use environ_m,     ONLY:l_environ,v_env_par,v_env_mat
+ use parser_m,      ONLY:parser
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels)  ::Xen 
  type(bz_samp) ::Xk,q
  type(X_t)     ::X
  type(DIPOLE_t)::Dip
  type(w_samp)  ::Xw
- logical       ::SILENT_MODE
+ logical       ::SILENT_MODE,CHILD
  !
  ! External
  !
@@ -66,10 +52,11 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
  ! Work Space
  !
  integer              :: iq,ID(3),i_err,X_MEM_n_freqs,io_X_done(nqibz),iq_mem,&
-&                        X_MEM_n_tot_freqs,n_poles,iq_dir
- real(SP)             :: minmax_ehe(2)
+&                        X_MEM_n_tot_freqs,n_poles,iq_dir,drude_n_states
+ real(SP)             :: minmax_ehe(2),f_eh
  character(1)         :: sec_mode
  character(schlen)    :: X_what
+ logical              :: metal_cond(2)
  !
  ! logicals and control
  !
@@ -81,10 +68,6 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
  ! Check if there is a Efield directions average to be done
  !
  call X_AVERAGE_setup("INIT",-1,X%q0)
- !
- ! Some check
- !
- if(X%ib(2)>Xen%nb) call error("Too many bands required in X. Run DFT with more bands!")
  !
  l_X_terminator = X_terminator_Kind/='none'
  if (l_X_terminator.and.trim(X_terminator_Kind)/='BG') then
@@ -105,12 +88,22 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
  !
  call TDDFT_do_X_W_typs(-1,X,Xw)
  !
+ !Check if to include the Dirac cone Fermi velocity
+ !
+ call parser('graphene',l_Dirac)
+ if(l_Dirac) then
+   call msg('r','Graphene q--> 0 term included')
+   call parser('v_fermi',Dirac_v_f)
+ end if
+ !
+ !
  ! Sectioning
  !
  sec_mode='*'
- if (depth>0) sec_mode='='
+ if (CHILD) sec_mode='='
  !
  X_dielectric_matrix=-1
+ Xw%grid_type="ra"
  !
  if (X%whoami==1) then
    if (.not.SILENT_MODE) call section(sec_mode,'Dynamical IP Response Function Matrix')
@@ -119,7 +112,9 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
    if (.not.SILENT_MODE) call section(sec_mode,'Static Dielectric Matrix')
    Xw%n_freqs    =1
    X_MEM_n_freqs =1
+   !
  else if (X%whoami==3) then
+   !
    if (.not.SILENT_MODE) call section(sec_mode,'Dynamical Dielectric Matrix')
    if (l_gw0) self_detect_E_range=.true.
    !
@@ -130,15 +125,38 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
    if (l_life) X_MEM_n_freqs = QP_n_W_freqs_redux
    !
  else if (X%whoami==4) then
+   !
    if (.not.SILENT_MODE) call section(sec_mode,'Dynamic Dielectric Matrix (PPA)')
    Xw%n_freqs    =2
    X_MEM_n_freqs =2
    Xw%er=(/epsilon(1._SP),0._SP/)
    Xw%dr=(/0._SP,X%ppaE/)
-   X%ordering='R'
+   X%ordering='R' !DALV: we should use 't'
+   !
+ else if (X%whoami==5) then
+   !
+   if (.not.SILENT_MODE) call section(sec_mode,'Dynamic Dielectric Matrix (MPA)')
+   !
+   if (mod(Xw%n_freqs,2)>0) Xw%n_freqs=Xw%n_freqs+1
+   X%mpa_npoles  = Xw%n_freqs/2
+   X_MEM_n_freqs =2*X%mpa_npoles
+   !
+   if (Xw%er(2) < Xw%er(1)) then
+     Xw%er(1) = 0.0_SP
+     Xw%er(2) = ( maxval(Xen%E(X%ib(2),:,:)) - minval(Xen%E(X%ib(1),:,:)) ) / 2.0_SP
+   endif
+   !
+   X%ordering='t'
+   Xw%grid_type="mp"
+   !
  endif
  !
- call X_pre_setup(Xen,Xk,X)
+ call X_pre_setup(Xen,Xk,X)      !DALV: in here the time ordering is changed to 'R' for metals
+                                 !      this could be problematic for FF real-axis GW calculations
+ ! AF: the following fix breaks Lifetime calcs
+ !     and need to be further analyzed
+ !
+ !if(X%whoami==3) X%ordering='T' !DALV: solved here
  !
  if (l_write_disk_Xo) then
    if (.not.SILENT_MODE) call warning('On-the-fly extraction of IP Response Function Matrix')
@@ -200,6 +218,26 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
    !
  endif
  !
+ ! Some check
+ !
+ if(X%ib(2)>Xen%nb) call error("Too many bands required in X. Run DFT with more bands!")
+ !
+ ! GS put a check in MPA for metals and correct first frequency appropriately
+ !
+ if (X%whoami==5) then   
+   ! 
+   call metallic_occupations(Xen,Xk,f_eh,drude_n_states)  
+   ! 
+   metal_cond(1) = any( (/Xen%nbf(:n_sp_pol)/=Xen%nbm(:n_sp_pol)/) )
+   metal_cond(2) = (f_eh>0._SP)
+   !
+   if (Xw%dr(1)<epsilon(1._SP) .and. all((/metal_cond(1:2)/)) ) then
+      call warning("dmXrnge = 0.0 not compatible with MPA dielectric constant for metals, changed to 1.d-4 Ha")
+      call msg('r','')
+      Xw%dr(1)=1.e-4_SP
+   end if
+ end if
+ !
  ! Parallel distribution
  !=======================
  if (.not.(l_life.and.X%iq(1)>1)) then
@@ -212,9 +250,9 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
  if (.not.io_RESPONSE) X_MEM_n_tot_freqs=X_MEM_n_freqs*PAR_nQ_ibz
  if (.not.allocated(X_par)) then
    if (     io_RESPONSE) allocate(X_par(1))
-#if !defined _PAR_IO
-   if (     io_RESPONSE) call X_ALLOC_elemental('X',(/X%ng,X%ng,X_MEM_n_tot_freqs/))
-#endif
+!#if !defined _PAR_IO
+!   if (     io_RESPONSE) call X_ALLOC_elemental('X',(/X%ng,X%ng,X_MEM_n_tot_freqs/))
+!#endif
    if (.not.io_RESPONSE) allocate(X_par(PAR_nQ_ibz))
    if (.not.io_RESPONSE) call X_ALLOC_elemental('X',(/X%ng,X%ng,X_MEM_n_tot_freqs/))
  endif
@@ -329,7 +367,7 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
      !
      if (l_environ) call X_ALLOC_parallel(v_env_par(iq_mem),X%ng,1,"X,CPU_ONLY")
      !
-     call X_ALLOC_parallel(X_par(iq_mem),X%ng,Xw%n_freqs,"XUP")
+     call X_ALLOC_parallel(X_par(iq_mem),X%ng,Xw%n_freqs,"X")
      !
      if (n_OPTICAL_dir_to_eval>1) call X_AVERAGE_setup("DIR-LOOP",iq_dir,X%q0)
      if (n_OPTICAL_dir_to_eval>1) X_what="("//trim(intc(iq_dir))//" of "//trim(intc(n_OPTICAL_dir_to_eval))//")"
@@ -355,6 +393,19 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
      call X_AVERAGE_setup("CLOSE",iq,X%q0)
    endif
    !
+   ! DS MERGE <
+   ! The following lines were after the call to X_redux and before the call to io_X before the merge
+   ! I moved them here after the merge
+   !
+   ! allocation of X_mat
+   if (io_RESPONSE.and..not.allocated(X_mat)) then
+#if ! defined _PAR_IO
+     call X_ALLOC_elemental('X',(/X%ng,X%ng,Xw%n_freqs/))
+#endif
+   endif
+   !
+   ! DS MERGE >
+   !
    ! X_par => X_mat
    !
 #if !defined _PAR_IO
@@ -365,6 +416,14 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
 #endif
    !
    call elemental_IO( iq , .FALSE. )
+   !
+   ! X_mat (and other few quantities) deallocate
+   !
+   if (io_RESPONSE.and.allocated(X_mat)) then
+#if ! defined _PAR_IO
+     call X_ALLOC_elemental('X')
+#endif
+   endif
    !
    ! CLEAN (1)
    ! Frequencies must not be cleaned in the case of lifetimes calculations when the EM1d
@@ -379,9 +438,6 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
    ! CLEAN (2)
    if (io_RESPONSE) call MATRIX_reset(X_par(iq_mem))
    if (io_RESPONSE.and.l_environ) call MATRIX_reset(v_env_par(iq_mem))
-   !
-   YAMBO_FREE(X_par_lower_triangle%blc)
-   call MATRIX_reset(X_par_lower_triangle)
    !
    if (use_X_DbGd) then
      YAMBO_FREE(X_DbGd_nkpt_at_q)
@@ -409,9 +465,7 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE)
  if (allocated(F_xc_gspace)) then
    YAMBO_FREE(F_xc_gspace)
  endif
- call DIP_alloc('DIP_iR')
- call DIP_alloc('DIP_P')
- call DIP_alloc('DIP_v')
+ call DIPOLE_ALLOC_global()
  if (.not.SILENT_MODE.or.X%iq(2)==q%nibz) call WF_free(WF)
  !
  contains

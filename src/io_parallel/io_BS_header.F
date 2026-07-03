@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
 !
-! Authors (see AUTHORS file for details): HM, DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
+! Copyright (C) 2022 The Yambo Team
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+! Authors (see AUTHORS file for details): HM DS
 !
 integer function io_BS_header(iq,X,ID,mode)
  !
@@ -30,6 +14,7 @@ integer function io_BS_header(iq,X,ID,mode)
  use pars,          ONLY:schlen,lchlen
  use stderr,        ONLY:intc
  use X_m,           ONLY:X_t
+ use parallel_m,    ONLY:master_cpu
  use BS,            ONLY:BS_K_cutoff_done,l_BSE_restart,l_BSE_kernel_complete
  use BS_solvers,    ONLY:variables_BS,BSS_desc
  use IO_m,          ONLY:frag_BS_K,write_is_on,read_is_on,io_mode,io_BS_K,DUMP
@@ -73,6 +58,8 @@ integer function io_BS_header(iq,X,ID,mode)
    !
  endif
  !
+ if(.not. (read_is_on(ID) .or. (write_is_on(ID).and.master_cpu)) ) return
+ !
  db_name='BS_head_Q'//trim(intc(iq))
  !
  io_BS_header=io_connect(desc=trim(db_name),type=2,ID=ID)
@@ -80,10 +67,6 @@ integer function io_BS_header(iq,X,ID,mode)
  if (trim(mode)=="connect") return
  !
  ! Check if the file already contains data and it is consistent
- ! DS: warning. This is potentially dangerous since all MPI tasts are all writing
- !              both the header and the variables
- !              I cannot put here if(master_cpu) because I need all MPI_tasks to
- !              go through the definition of the variables (see similar issue in io_X.F)
  !
  io_BS_header=io_header(ID,QPTS=.true.,R_LATT=.true.,WF=.true.,&
 &                       IMPOSE_SN=.true.,XC_KIND="K_WF force Xs",CUTOFF=.true.,FRAG=frag_BS_K)

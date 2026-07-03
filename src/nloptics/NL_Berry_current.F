@@ -1,26 +1,19 @@
 !
-!        Copyright (C) 2000-2021 the Yambo team
-!              http://www.yambo-code.org/ 
+! License-Identifier: GPL
+!
+! Copyright (C) 2016 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): CA
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
 !
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
+!> @brief Calculate current using the Souza-Iniguez-Vanderbilt formulation
+!!
+!! @param[in]       V_bands			time-dependent valence bands
+!! @param[in]       k_map			k-points map in the BZ
+!! @param[in]       Xk				k-points indexes
+!! @param[in]       en				energies array
+!!
+!! @param[out]      NL_J			current vector
 !
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
-!                  
 subroutine NL_Berry_current(en,Xk,k_map,V_bands,NL_J)
  !
  ! Evalute current using Eq. D1 of Souza et al. 
@@ -29,12 +22,13 @@ subroutine NL_Berry_current(en,Xk,k_map,V_bands,NL_J)
  use pars,           ONLY:SP,cZERO,pi
  use electrons,      ONLY:n_sp_pol,levels,spin_occ
  use R_lattice,      ONLY:bz_samp,bz_map,nXkbz
- use D_lattice,      ONLY:a
+ use D_lattice,      ONLY:a,nsym,dl_sop,i_time_rev
  use vec_operate,    ONLY:get_id_perpendicular
- use parallel_m,     ONLY:PAR_IND_Xk_ibz,PAR_COM_Xk_ibz_INDEX,PAR_IND_Xk_ibz
+ use parallel_m,     ONLY:PAR_COM_Xk_ibz_INDEX,PAR_IND_Xk_ibz,PAR_IND_Xk_bz
  use parallel_int,   ONLY:PP_redux_wait
  use QP_m,           ONLY:QP_nk
  use nl_optics,      ONLY:NL_bands
+ use electric,       ONLY:l_res_symms,l_force_SndOrd
  !
  implicit none           
  !
@@ -48,10 +42,10 @@ subroutine NL_Berry_current(en,Xk,k_map,V_bands,NL_J)
  !
  integer       :: ik,i1,iv,isp,ikbz,Nperpend,id,id2,id3,is
  integer       :: id_red,istep,max_step
- complex(SP)   :: NL_J_red(3)
- complex(SP)   :: VH_bands(NL_bands(2),maxval(en%nbf),Xk%nibz,n_sp_pol)
- complex(SP)   :: V_tilde(maxval(en%nbf),NL_bands(2),2)
- complex(SP)   :: delta_V_tilde(maxval(en%nbf),NL_bands(2),2)
+ complex(SP)   :: NL_J_red(3),NL_J_symm(3)
+ complex(SP)   :: VH_bands(NL_bands(1):NL_bands(2),maxval(en%nbf),Xk%nibz,n_sp_pol)
+ complex(SP)   :: V_tilde(maxval(en%nbf),NL_bands(1):NL_bands(2),2)
+ complex(SP)   :: delta_V_tilde(maxval(en%nbf),NL_bands(1):NL_bands(2),2)
  !
  ! Build the < v_n | H_k | 
  !
@@ -62,7 +56,7 @@ subroutine NL_Berry_current(en,Xk,k_map,V_bands,NL_J)
      if(.not.PAR_IND_Xk_ibz%element_1D(ik)) cycle
      !
 !$omp parallel do default(shared), private(i1)
-     do i1=1,NL_bands(2)
+     do i1=NL_bands(1),NL_bands(2)
        VH_bands(i1,:,ik,isp)=en%E(i1,ik,isp)*conjg(V_bands(i1,:,ik,isp))
      enddo
 !$omp end parallel do
@@ -79,6 +73,8 @@ subroutine NL_Berry_current(en,Xk,k_map,V_bands,NL_J)
  !
  isp  =1
  !
+ ! Calculate | \der_k v_k> and make the product < v_k | H_k | \der_k v_k >
+ !
  do id_red=1,3
    !
    if(k_map%max_kdir(id_red)/=1) then   
@@ -88,11 +84,16 @@ subroutine NL_Berry_current(en,Xk,k_map,V_bands,NL_J)
      Nperpend=k_map%max_kdir(id2)*k_map%max_kdir(id3)       
      !
      max_step=1
-!     if(k_map%max_kdir(id_red)>=6.and..not.l_force_SndOrd) max_step=2
+! 
+!    Using higher order for the k-derivative gives a worst result
+!    when compared with dP/dt for this reason this line is commented
+!
+    if(k_map%max_kdir(id_red)>=6.and..not.l_force_SndOrd) max_step=2
+!
      !
      do ikbz=1,nXkbz
        !
-!       if(.not.PAR_IND_Xk_bz%element_1D(ikbz)) cycle
+       if(.not.PAR_IND_Xk_bz%element_1D(ikbz)) cycle
        !
        do istep=1,max_step
          call Build_tilde_vbands(en,Xk,ikbz,isp,istep,id_red,V_bands(:,:en%nbf(isp),:,isp),V_tilde)
@@ -107,7 +108,8 @@ subroutine NL_Berry_current(en,Xk,k_map,V_bands,NL_J)
          enddo
        elseif(max_step==2) then
          do iv=1,en%nbf(isp)
-           NL_J_red(id_red)=NL_J_red(id_red)+sum(VH_bands(:,iv,ik,isp)*(4._SP*delta_V_tilde(iv,:,1)-delta_V_tilde(iv,:,2)))/3._SP
+           NL_J_red(id_red)=NL_J_red(id_red)+sum(VH_bands(:,iv,ik,isp) &
+&					    *(4._SP*delta_V_tilde(iv,:,1)-delta_V_tilde(iv,:,2)))/3._SP
          enddo
        endif
        !
@@ -121,14 +123,24 @@ subroutine NL_Berry_current(en,Xk,k_map,V_bands,NL_J)
    !
  enddo
  !
+ call PP_redux_wait(NL_J_red,COMM=PAR_COM_Xk_ibz_INDEX%COMM)
+ !  
  ! Transform in cartesian coordinates
  ! 
-!$omp parallel do default(shared), private(i1)
+!$omp parallel do default(shared), private(id)
  do id=1,3
    NL_J(id)=-sum(NL_J_red(:)*a(:,id))/(4.0*pi)
  enddo
 !$omp end parallel do
  !
-! call PP_redux_wait(NL_J,COMM=PAR_COM_Xk_bz_INDEX%COMM)
+ ! Apply residual symmetries
+ !
+ if(nsym>1.and.l_res_symms) then
+   NL_J_symm=cZERO
+   do is=1,nsym/(i_time_rev+1) ! Time-reversal is never present 
+     NL_J_symm(:)=NL_J_symm(:)+matmul(dl_sop(:,:,is),NL_J)
+   enddo
+   NL_J=NL_J_symm/dble(nsym/(i_time_rev+1))
+ endif
  !
 end subroutine NL_Berry_current

@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2016 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): CA MG
-!
-! This file is distributed under the terms of the GNU
-! General Public License. You can redistribute it and/or
-! modify it under the terms of the GNU General Public
-! License as published by the Free Software Foundation;
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will
-! be useful, but WITHOUT ANY WARRANTY; without even the
-! implied warranty of MERCHANTABILITY or FITNESS FOR A
-! PARTICULAR PURPOSE.  See the GNU General Public License
-! for more details.
-!
-! You should have received a copy of the GNU General Public
-! License along with this program; if not, write to the Free
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston,
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 ! This subroutine fill the W_electric matrix 
 !
@@ -41,6 +25,7 @@ subroutine SC_add_efield(E,k,i_sp_pol,V_bands,Pol)
  integer,       intent(in)  :: i_sp_pol
  complex(SP),   intent(in)  :: V_bands(SC_bands(1):SC_bands(2),E%nbf(i_sp_pol),QP_nk)
  complex(SP),   intent(out) :: Pol(3)
+ complex(SP) :: Wk(3,SC_bands(1):SC_bands(2),SC_bands(1):SC_bands(2))
  !
  ! Working space
  !
@@ -67,7 +52,8 @@ subroutine SC_add_efield(E,k,i_sp_pol,V_bands,Pol)
  W_electric=cZERO
  !
  do ik=1,QP_nk
-   call Build_W_operator(E,k,A_tot,ik,i_sp_pol,V_bands,W_electric(:,:,ik,i_sp_pol))
+   call Build_W_operator(E,k,ik,i_sp_pol,V_bands,Wk)
+   call Apply_W_field(A_tot,Wk,W_electric(:,:,ik,i_sp_pol))
  enddo
  !
 end subroutine SC_add_efield

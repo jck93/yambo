@@ -1,27 +1,10 @@
 /*
-        Copyright (C) 2000-2022 the YAMBO team
-              http://www.yambo-code.org
-
- Authors (see AUTHORS file for details): AF
+  License-Identifier: GPL
  
- This file is distributed under the terms of the GNU 
- General Public License. You can redistribute it and/or 
- modify it under the terms of the GNU General Public 
- License as published by the Free Software Foundation; 
- either version 2, or (at your option) any later version.
-
- This program is distributed in the hope that it will 
- be useful, but WITHOUT ANY WARRANTY; without even the 
- implied warranty of MERCHANTABILITY or FITNESS FOR A 
- PARTICULAR PURPOSE.  See the GNU General Public License 
- for more details.
-
- You should have received a copy of the GNU General Public 
- License along with this program; if not, write to the Free 
- Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
- MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
+  Copyright (C) 2016 The Yambo Team
+ 
+  Authors (see AUTHORS file for details): AF
 */
-
 
 #ifdef __STDC__
 #  define CAT(a,b) a##b 
@@ -30,12 +13,20 @@
 #  define CAT(a,b) PASTE(a)b
 #endif
 
-#ifdef _CUDA
+#ifdef _CUDAF
 #  define DEV_SUBNAME(x)        CAT(x,_gpu)
 #  define DEV_SUBNAME_ALT(x)    CAT(x,_gpu)
 #  define DEV_VARNAME(x)        CAT(x,_d)
 #  define DEV_ATTRIBUTE         , device
 #  define DEV_PINNED            , pinned
+
+#elif defined _OPENACC || defined _OPENMP_GPU
+#  define DEV_SUBNAME(x)        CAT(x,_gpu)
+#  define DEV_SUBNAME_ALT(x)    CAT(x,_cpu)
+#  define DEV_VARNAME(x)        x
+#  define DEV_ATTRIBUTE
+#  define DEV_PINNED
+
 #else
 #  define DEV_SUBNAME(x)        x
 #  define DEV_SUBNAME_ALT(x)    CAT(x,_cpu)
@@ -50,11 +41,29 @@
 #define DEV_ATTR            DEV_ATTRIBUTE
 #define DEV_PIN             DEV_PINNED
 
-!#ifdef CUDA
-!  #define YAMBO_CUDA_OR_OMP(priv_list,nloop)  !$cuf kernel do(nloop) <<<*,*>>>
-!  #define YAMBO_CUDA_OR_OMP_END
-!#else 
-!  #define YAMBO_CUDA_OR_OMP(priv_list,nloop)  !$omp parallel do default(shared), private(private_list), collapse(nloop)
-!  #define YAMBO_CUDA_OR_OMP_END               !$omp end parallel do
-!#endif
 
+#if defined _OPENACC
+#  define DEV_ACC $acc
+#  define DEV_ACC_DEBUG !!!!
+#else
+#  define DEV_ACC !!!!
+#  define DEV_ACC_DEBUG !!!!
+#endif
+
+#if defined _CUDAF
+#  define DEV_CUF $cuf
+#else
+#  define DEV_CUF !!!!
+#endif
+
+#if defined _OPENMP_GPU
+#  define DEV_OMPGPU $omp
+#else
+#  define DEV_OMPGPU !!!!
+#endif
+
+#if defined _OPENMP && !defined (_GPU)
+#  define DEV_OMP $omp
+#else
+#  define DEV_OMP !!!!
+#endif

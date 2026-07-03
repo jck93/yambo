@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine acfdt_tot_energy(Xen,Xk,En,k,q,X,Dip)
  !
@@ -39,7 +23,8 @@ subroutine acfdt_tot_energy(Xen,Xk,En,k,q,X,Dip)
  use electrons,      ONLY:levels,nel
  use D_lattice,      ONLY:DL_vol
  use com,            ONLY:msg
- use X_m,            ONLY:X_t,X_ALLOC_elemental,X_mat
+ use ALLOC,          ONLY:X_ALLOC_elemental
+ use X_m,            ONLY:X_t,X_mat
  use QP_m,           ONLY:QP_nb,QP_nk,QP_n_states,QP_table,QP_state,QP_Vnl_xc,QP_Vxc
  use collision_el,   ONLY:elemental_collision,elemental_collision_free
  use IO_int,         ONLY:io_control
@@ -48,7 +33,7 @@ subroutine acfdt_tot_energy(Xen,Xk,En,k,q,X,Dip)
 &                         XC_LDA_X,XC_CORRELATION,XC_potential_driver
  use global_XC,      ONLY:WF_xc_functional
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels)  ::Xen,En
  type(bz_samp) ::Xk,q,k
@@ -190,7 +175,7 @@ subroutine acfdt_tot_energy(Xen,Xk,En,k,q,X,Dip)
      Xw%dr=(/freq(1),freq(ACFDT_n_freqs)/)
      YAMBO_ALLOC(Xw%p,(ACFDT_n_freqs))
      Xw%p(:)=(0.,1.)*freq(:)
-     i_err=X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,iqibz>1)
+     i_err=X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,iqibz>1,.TRUE.)
      if (i_err==0) exit
    enddo
    !

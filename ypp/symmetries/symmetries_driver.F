@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2016 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM CA DS
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 subroutine symmetries_driver(E,Xk)
  !
@@ -34,9 +18,12 @@ subroutine symmetries_driver(E,Xk)
  use wave_func,           ONLY:wf_ng,WF
  use stderr,              ONLY:intc
  use interfaces,          ONLY:WF_load,WF_free,el_magnetization
+ use IO_int,              ONLY:io_control
+ use IO_m,                ONLY:REP,OP_WR_CL,VERIFY
  use parser_m,            ONLY:parser
+ use D_lattice,           ONLY:kpoints_map,old_nsym,old_dl_sop,old_S_contains_TR
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels),intent(in)     :: E
  type(bz_samp),intent(inout) :: Xk
@@ -44,15 +31,16 @@ subroutine symmetries_driver(E,Xk)
  ! Work Space
  !
  type(bz_samp)         :: Xk_save
- integer,allocatable   :: kpoints_map(:,:)
  ! 
- integer               :: old_nsym
- real(SP)              :: old_dl_sop(3,3,nsym)
  integer               :: old_sop_inv(nsym)
- logical               :: S_contains_TR(nsym),l_keep_k_grid
+ logical               :: l_keep_k_grid
  !
- integer               :: action_kind,old_nkpt
+ integer               :: old_nkpt,ID,io_old_SYMMs
+ integer, external     :: io_full_SYMMs
  !
+ YAMBO_ALLOC(old_dl_sop,(3,3,nsym))
+ YAMBO_ALLOC(old_S_contains_TR,(nsym))
+ !     
  if (core_io_path==more_io_path) more_io_path=trim(core_io_path)//"/FixSymm"
  !
  call parser('KeepKGrid',l_keep_k_grid)
@@ -85,7 +73,7 @@ subroutine symmetries_driver(E,Xk)
  YAMBO_FREE(Xk%pt)
  call k_reduce(Xk,.false.)
  !
- call fix_symmetries(old_nsym,old_dl_sop,old_sop_inv,S_contains_TR,action_kind)
+ call fix_symmetries(old_nsym,old_dl_sop,old_sop_inv,old_S_contains_TR)
  !
  if(old_nsym==nsym) then
    call msg('s','Symmetries did not change. Program terminaned.')
@@ -117,7 +105,7 @@ subroutine symmetries_driver(E,Xk)
  endif
  !
  YAMBO_ALLOC(kpoints_map,(2,Xk%nibz))
- call k_build_map(Xk,Xk_save,kpoints_map,action_kind)
+ call k_build_map(Xk,Xk_save,kpoints_map)
  !
  ! If I remove symmetries from old DB I need to add the new veriables to the DB1
  !
@@ -129,13 +117,18 @@ subroutine symmetries_driver(E,Xk)
  endif
  !
  ! Energies and Wave-functions
- call fix_WFs_and_E(E,Xk,Xk_save,kpoints_map,old_nsym,S_contains_TR,action_kind)
+ call fix_WFs_and_E(E,Xk,Xk_save,kpoints_map,old_nsym,old_S_contains_TR)
  !
  ! Rotate KB or Vnl
- call fix_PPs(E,Xk,Xk_save,kpoints_map,old_nsym,old_dl_sop,old_sop_inv,S_contains_TR,action_kind)
+ call fix_PPs(E,Xk,Xk_save,kpoints_map,old_nsym,old_dl_sop,old_sop_inv,old_S_contains_TR)
  !
  ! Rotate atomic projections
- call fix_ATOMPROJs(E,Xk,Xk_save,kpoints_map,old_nsym,old_dl_sop,old_sop_inv,S_contains_TR,action_kind)
+ call fix_ATOMPROJs(E,Xk,Xk_save,kpoints_map,old_nsym,old_dl_sop,old_sop_inv,old_S_contains_TR)
+ !
+ ! Savel old symmetries on file
+ ! ============================
+ call io_control(ACTION=OP_WR_CL,COM=REP,SEC=(/1/),MODE=VERIFY,ID=ID)
+ io_old_SYMMs=io_full_SYMMs(Xk,ID)
  !
  ! CLEAN
  !=======

@@ -1,25 +1,9 @@
 !
-!        Copyright (C) 2000-2022 the YAMBO team
-!              http://www.yambo-code.org
+! License-Identifier: GPL
+!
+! Copyright (C) 2006 The Yambo Team
 !
 ! Authors (see AUTHORS file for details): AM
-! 
-! This file is distributed under the terms of the GNU 
-! General Public License. You can redistribute it and/or 
-! modify it under the terms of the GNU General Public 
-! License as published by the Free Software Foundation; 
-! either version 2, or (at your option) any later version.
-!
-! This program is distributed in the hope that it will 
-! be useful, but WITHOUT ANY WARRANTY; without even the 
-! implied warranty of MERCHANTABILITY or FITNESS FOR A 
-! PARTICULAR PURPOSE.  See the GNU General Public License 
-! for more details.
-!
-! You should have received a copy of the GNU General Public 
-! License along with this program; if not, write to the Free 
-! Software Foundation, Inc., 59 Temple Place - Suite 330,Boston, 
-! MA 02111-1307, USA or visit http://www.gnu.org/copyleft/gpl.txt.
 !
 module X_m
  !
@@ -28,10 +12,10 @@ module X_m
  use units,          ONLY:HA2EV
  use matrix,         ONLY:PAR_matrix
  use OUTPUT,         ONLY:N_MAX_columns
- use cuda_m,         ONLY:have_cuda
+ use gpu_m,          ONLY:have_gpu
  !
 #include <dev_defs.h>
-#include <memory.h>
+#include <y_memory.h>
  !
  ! Observables
  !
@@ -58,7 +42,10 @@ module X_m
  ! Large Q-vector support 
  !
  real(SP)                 :: q_plus_G_direction(3)
+ real(SP)                 :: Q_plus_G_pt(3)
+ real(SP)                 :: Q_plus_G_sq_modulus
  integer                  :: Q_Shift_Order
+ integer                  :: i_G_shift
  !
  ! Double Grid
  !
@@ -71,14 +58,13 @@ module X_m
  integer ,allocatable :: X_DbGd_nkpt_at_q(:)
  integer ,allocatable :: X_DbGd_nkpt_at_q_table(:,:,:)
  !
- ! workspace for X_irredux_residuals on GPUs
- !
- complex(SP), allocatable DEV_ATTR :: rhotw_save_d(:), rhotw_save2_d(:)
- !
  ! Absorption & Polarizability
  !
  integer                  :: N_BS_E_sorted=0
+ integer,     allocatable :: BS_E_sorted_indx(:,:,:)
  complex(SP), allocatable :: BS_E_sorted(:,:,:)
+ complex(SP), allocatable :: Resp_ii(:,:)
+ complex(SP), allocatable :: Resp_ij(:,:)
  complex(SP), allocatable :: Epsilon_ii(:,:)
  complex(SP), allocatable :: Epsilon_ij(:,:)
  complex(SP), allocatable :: Joint_DOS(:,:) 
@@ -94,7 +80,7 @@ module X_m
  !
  character(schlen)        :: Chi_mode
  character(schlen)        :: Chi_linalg_mode
- logical                  :: X_use_gpu=have_cuda
+ logical                  :: X_use_gpu=have_gpu
  logical                  :: X_use_lin_sys=.false.
  real(SP),    allocatable :: X_poles(:)
  real(SP),    allocatable :: X_Ein_poles(:)
@@ -124,19 +110,22 @@ module X_m
  ! I/O descriptions
  !
  type(IO_desc)    :: X_desc
+ type(IO_desc)    :: MPA_desc
  !
  ! PARALLEL distribution
  !
  type(PAR_matrix), allocatable, target :: X_par(:)
- type(PAR_matrix), target      :: X_par_lower_triangle
- logical                       :: X_lower_triangle_matrix_in_use=.FALSE.
  integer                       :: X_rows(2) = 0
+ !DEV_ACC declare device_resident(X_rows)
  integer                       :: X_cols(2) = 0
- complex(SP),      allocatable :: X_mat(:,:,:)
- complex(SP),      allocatable DEV_ATTR :: X_mat_d(:,:,:)
+ !DEV_ACC declare device_resident(X_cols)
+ complex(SP), allocatable, target :: X_mat(:,:,:)
+ complex(SP), allocatable, target DEV_ATTR :: X_mat_d(:,:,:)
  !
  type X_t
-   integer    :: whoami ! 1:X 2:em1s 3:em1d 4:pp 5:Xo
+   ! DS: is 1 Xo (see X_dielectric_matrix:109) or Xx (see io_X.F) ?
+   !
+   integer    :: whoami ! 1:Xo/Xx 2:em1s 3:em1d 4:ppa 5:mpa
    integer    :: ng
    integer    :: ng_db
    integer    :: iq(2)
@@ -145,6 +134,7 @@ module X_m
    integer    :: db_ib(2)
    integer    :: db_ib_lim(2)
    integer    :: ngostnts
+   integer    :: mpa_npoles
    real(SP)   :: ehe(2)
    real(SP)   :: q0(3)
    real(SP)   :: cg_percentual
@@ -168,7 +158,7 @@ module X_m
    integer               :: N_messages
    character(schlen)     :: messages(N_MAX_columns)
  end type
- integer, parameter     :: N_X_obs=15
+ integer, parameter     :: N_X_obs=16
  type(X_obs_t)          :: X_obs(N_X_obs) 
  !
  interface
@@ -184,7 +174,7 @@ module X_m
      character(*), optional :: MORE
    end subroutine
    !
-   subroutine X_OUTPUT_driver(WHAT,keys,solver,IQ,IG,DESC,data)
+   subroutine X_OUTPUT_driver(WHAT,keys,solver,IQ,IG,DESC,data,indexes)
      use pars,           ONLY:SP
      use frequency,      ONLY:w_samp
      use descriptors,    ONLY:IO_desc
@@ -194,6 +184,7 @@ module X_m
      integer,      optional:: IQ,IG
      type(IO_desc),optional:: DESC
      real(SP),     optional:: data(:)
+     integer,      optional:: indexes(:)
    end subroutine
    !
    subroutine X_Double_Grid_setup(iq,k,k_FGbz,nTrans_percent,Radius)
@@ -205,20 +196,14 @@ module X_m
      real(SP),            optional :: nTrans_percent,Radius
    end subroutine
    !
-   logical function EPS_2_eels(wv,nw,be_verbose,ordering,eps,eel)
-     use pars,          ONLY:SP
-     integer              :: nw 
-     complex(SP)          :: wv(nw)
-     logical              :: be_verbose
-     character(2)         :: ordering
-     complex(SP) ,optional:: eps(nw),eel(nw)
-   end function
-   !
-   subroutine X_ALLOC_elemental(WHAT,DIM)
-     character(*)      :: WHAT
-     integer, optional :: DIM(:)
+   subroutine X_redux_build_kernel(KERNEL,Xo,Xo_rows,Xo_cols,compute_on_gpu,iq)
+     use matrix,        ONLY:PAR_matrix
+     implicit none
+     type(PAR_matrix), target :: KERNEL,Xo
+     integer, intent(in)      :: Xo_rows(2),Xo_cols(2),iq
+     logical, intent(in)      :: compute_on_gpu
    end subroutine
-   !
+   ! 
  end interface
  !
  contains
@@ -255,6 +240,7 @@ module X_m
      Xo%db_ib        =Xi%db_ib
      Xo%db_ib_lim    =Xi%db_ib_lim
      Xo%ngostnts     =Xi%ngostnts
+     Xo%mpa_npoles   =Xi%mpa_npoles
      Xo%ordering     =Xi%ordering
      Xo%Vnl_included =Xi%Vnl_included
      Xo%is_symm      =Xi%is_symm
@@ -278,6 +264,7 @@ module X_m
      !DEBUG<
      X%iq           =(/1,-1/)
      X%ngostnts     =0
+     X%mpa_npoles   =0
      X%whoami       =0
      X%Vnl_included =.false.
      X%is_symm      =.true.

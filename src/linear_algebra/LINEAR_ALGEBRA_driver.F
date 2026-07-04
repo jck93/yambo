@@ -28,7 +28,7 @@ subroutine LINEAR_ALGEBRA_driver(idriver,lib_in,&
  use pars,          ONLY:SP,cONE,cZERO
  use linear_algebra,ONLY:INV,DIAGO,DIAGX,CHASE,LIN_SYS,SVD_INV,MAT_MUL,USE_LK,USE_SLK
  use matrix,        ONLY:PAR_matrix,MATRIX_reset
- use wrapper,       ONLY:M_by_M
+ use wrapper,       ONLY:M_by_M,M_by_M_gpu
  use parallel_m,    ONLY:linear_algebra_is_parallel,ncpu
  use interfaces,    ONLY:MATRIX_transfer
  use BS,            ONLY:BS_block,BS_H_dim
@@ -377,15 +377,15 @@ subroutine LINEAR_ALGEBRA_driver(idriver,lib_in,&
    ! ###> SERIAL INVERSION 
    !
    if (idriver==INV) then
-     call SERIAL_inversion_gpu(N,M_slk%blc_d(:,:,M_slk%I),det_,present(det))
+     call SERIAL_inversion_gpu(N,DEV_VAR(M_slk%blc)(:,:,M_slk%I),det_,present(det))
      if(present(det)) det=det_
    endif
    !
    ! ####> MAT_MUL
    ! C = M * B
    if (idriver==MAT_MUL) then
-     call M_by_M('N','N',N,N,N,cONE,M_slk%blc_d(:,:,M_slk%I),N,&
-&                        B_slk%blc_d(:,:,B_slk%I),N,cZERO,C_slk%blc_d(:,:,C_slk%I),N)
+     call M_by_M_gpu('N','N',N,N,N,cONE,DEV_VAR(M_slk%blc)(:,:,M_slk%I),N,&
+&                    DEV_VAR(B_slk%blc)(:,:,B_slk%I),N,cZERO,DEV_VAR(C_slk%blc)(:,:,C_slk%I),N)
    endif
    !
 #else

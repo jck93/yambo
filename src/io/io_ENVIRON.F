@@ -38,7 +38,7 @@ integer function io_ENVIRON(X,ID) result(io_ENV)
  use timing_m,      ONLY:timing
  use environ_m,     ONLY:v_env_par,v_env_mat
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  type(X_t)   :: X
  integer     :: ID

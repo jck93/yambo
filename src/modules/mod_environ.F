@@ -26,7 +26,7 @@ module environ_m
  use pars,           ONLY:SP
  use matrix,         ONLY:PAR_matrix
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  logical  :: l_environ=.false.
  !

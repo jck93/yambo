@@ -13,6 +13,8 @@
  cutoff_test.o
  cutoff_ws.o
  cutoff_ws_tools.o
+ environ_test.o
+ environ_vcoul.o
  rim.o
  rim_integrate_v.o
  rim_integrate_w.o

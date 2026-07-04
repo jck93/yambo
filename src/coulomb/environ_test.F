@@ -43,7 +43,7 @@ subroutine environ_test(q,v_environ,label)
  use D_lattice,      ONLY:DL_vol
  use FFT_m,          ONLY:fft_size,fft_dim,fftw_plan,fft_g_table
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  real(SP),         intent(in) :: q(3)
  type(PAR_matrix), intent(in) :: v_environ

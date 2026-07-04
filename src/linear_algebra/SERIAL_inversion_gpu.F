@@ -28,8 +28,9 @@ subroutine SERIAL_inversion_gpu(n,M_d,det,eval_det)
  use linear_algebra, ONLY:LINEAR_ALGEBRA_error,LU_factorization,LU_inversion,&
 &                         LINEAR_ALGEBRA_WS_reset,LALGEBRA_WS
  use timing_m,       ONLY:timing
- use cuda_m
-#include<memory.h>
+ use gpu_m
+ !
+#include<y_memory.h>
  !
  integer     :: n
  complex(SP), device :: M_d(n,n)
@@ -53,7 +54,7 @@ subroutine SERIAL_inversion_gpu(n,M_d,det,eval_det)
  YAMBO_ALLOC(WS%m1_cmplx_d,(WS%dim,WS%dim))
  !
  ! init
- if (.not.cuda_linalg_init) call cuda_linalg_setup()
+ if (.not.gpu_linalg_init) call gpu_linalg_setup()
  !
  ! init identity
  ! Since the interface to GETRI is not provided by cusolver

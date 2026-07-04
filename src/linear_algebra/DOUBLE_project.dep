@@ -14,6 +14,7 @@
  SERIAL_SVD_inversion.o
  SERIAL_diago.o
  SERIAL_inversion.o
+ SERIAL_inversion_gpu.o
  SERIAL_lin_system.o
  SERIAL_lin_system_gpu.o
  SLK_ORTHO_group.o

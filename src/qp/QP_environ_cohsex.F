@@ -61,16 +61,16 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
  use parallel_m,    ONLY:PAR_COM_QP_A2A
  use SC,            ONLY:it_now,it_to_start
 #endif
- use deviceXlib_m,  ONLY:dev_memcpy
- use cuda_m,        ONLY:have_cuda
-#ifdef _CUDA
+ use devxlib,       ONLY:devxlib_memcpy_d2h,devxlib_memcpy_h2d
+ use gpu_m,         ONLY:have_gpu
+#ifdef _GPU
  use drivers,       ONLY:Finite_Tel
  use D_lattice,     ONLY:Bose_Temp
  use functions,     ONLY:bose_E_cut
 #endif
  !
 #include<dev_defs.h>
-#include<memory.h>
+#include<y_memory.h>
  !
  type(levels) ::E
  type(bz_samp)::Xk,k,q
@@ -222,8 +222,8 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
    !
    if (iqibz/=isc%iqref) then
      !
-     call DEV_SUB(scatter_Gamp)(isc,'c')
-     if (have_cuda) call dev_memcpy(isc%gamp,isc%gamp_d)
+     call scatter_Gamp_gpu(isc,'c')
+     if (have_gpu) call devxlib_memcpy_d2h(isc%gamp,DEV_VAR(isc%gamp))
      !
      if (io_RESPONSE) then
        !
@@ -276,7 +276,7 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
      X_is_TR_rotated=.true.
    endif
    !
-   if (have_cuda) call dev_memcpy(X_mat_d, X_mat)
+   if (have_gpu) call devxlib_memcpy_h2d(DEV_VAR(X_mat), X_mat)
    !
    QP_loop: do i_qp=i_qp_to_start,QP_n_states
      !
@@ -303,8 +303,8 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
      isc%os=(/QP_table(i_qp,2),QP_table(i_qp,3),1,spin(QP_table(i_qp,:))/)
      isc%qs=(/1,1,1/)
 
-     call DEV_SUB(scatter_Bamp)(isc)
-     if (have_cuda) call dev_memcpy(isc%rhotw,isc%rhotw_d)
+     call scatter_Bamp_gpu(isc)
+     if (have_gpu) call devxlib_memcpy_d2h(isc%rhotw,DEV_VAR(isc%rhotw))
      !
      dp_dummy = 0.0_DP
      !
@@ -350,16 +350,16 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
        !
        isc%os(1)=ib
        !
-       call DEV_SUB(scatter_Bamp)(isc)
-       if (have_cuda) call dev_memcpy(isc%rhotw, isc%rhotw_d)
+       call scatter_Bamp_gpu(isc)
+       if (have_pgu) call devxlib_memcpy_d2h(isc%rhotw, DEV_VAR(isc%rhotw))
        iscp%os=isc%os
        !
        if (any(isc%is/=iscp%is)) then
-         call DEV_SUB(scatter_Bamp)(iscp)
-         if (have_cuda) call dev_memcpy(iscp%rhotw, iscp%rhotw_d)
+         call scatter_Bamp_gpu(iscp)
+         if (have_gpu) call devxlib_memcpy_d2h(iscp%rhotw, DEV_VAR(iscp%rhotw))
        else
          iscp%rhotw=isc%rhotw
-         if (have_cuda) call dev_memcpy(iscp%rhotw_d, iscp%rhotw)
+         if (have_gpu) call devxlib_memcpy_h2d(DEV_VAR(iscp%rhotw), iscp%rhotw)
        endif
        !
        dc=cZERO

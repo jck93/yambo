@@ -6,6 +6,7 @@
  QP_check_interpolate_W.o
  QP_descriptions.o
  QP_driver.o
+ QP_environ_cohsex.o
  QP_expand.o
  QP_interpolate_W.o
  QP_life_transitions.o

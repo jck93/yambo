@@ -14,6 +14,7 @@
  p2y.o
  p2y_atmproj.o
  p2y_db1.o
+ p2y_environ.o
  p2y_pseudo.o
  p2y_wf.o
  pw_atoms_module.o

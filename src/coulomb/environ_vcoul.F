@@ -43,11 +43,11 @@ subroutine environ_vcoul(q,v_environ,lcomp_asympt)
  use interfaces,     ONLY:LINEAR_ALGEBRA_driver,MATRIX_duplicate
  use environ_m,      ONLY:l_environ,eps_env_RL, eps0, A0
  use R_lattice,      ONLY:b,G_m_G,g_vec,ng_vec,q_norm,minus_G
- use deviceXlib_m,   ONLY:dev_memcpy
- use cuda_m,         ONLY:have_cuda
+ use devxlib,        ONLY:devxlib_memcpy_h2d
+ use gpu_m,          ONLY:have_gpu
  !
 #include<dev_defs.h>
-#include<memory.h>
+#include<y_memory.h>
  !
  real(SP),         intent(in)    :: q(3)
  type(PAR_matrix), intent(inout) :: v_environ
@@ -141,14 +141,14 @@ subroutine environ_vcoul(q,v_environ,lcomp_asympt)
  enddo
  !$omp end parallel do
  !
- if (have_cuda) then
-   call dev_memcpy(v_environ%blc_d,v_environ%blc)
+ if (have_gpu) then
+   call devxlib_memcpy_h2d(DEV_VAR(v_environ%blc),v_environ%blc)
  endif
  !
  ! store the environ kernel in Kbar for later use if needed
  if (lcomp_asympt) then
     call MATRIX_duplicate("+1",M_in=v_environ,M_out=Kbar)
-    YAMBO_FREE(Kbar%blc_d)
+    YAMBO_FREE_GPU(DEV_VAR(Kbar%blc))
  endif
  !
  ! compute v_environ

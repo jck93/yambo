@@ -48,6 +48,7 @@
  mod_drivers.o
  mod_electric.o
  mod_electrons.o
+ mod_environ.o
  mod_fields.o
  mod_frequency.o
  mod_functions.o

@@ -56,9 +56,9 @@ PJ_NLLIBS_LD = $(BASIC_LIBS_LD) interpolate real_time_control qp_control setup \
 #=====================================
 #
 2Y_LIBS       = driver tools modules memory allocations matrices linear_algebra parallel parser communicate output common timing Yio io $(IO_MODE) \
-                setup interface stop_and_restart bz_ops 
+                setup interface stop_and_restart wf_and_fft bz_ops
 2Y_LIBS_LD    = driver tools memory allocations communicate modules matrices linear_algebra parallel parser output common timing Yio io $(IO_MODE) \
-                setup interface stop_and_restart bz_ops 
+                setup interface stop_and_restart wf_and_fft bz_ops
 #
 # YPP folders 
 #===============

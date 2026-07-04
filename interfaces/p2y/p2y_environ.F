@@ -36,7 +36,7 @@ subroutine p2y_environ(filename)
  use environ_m,      ONLY:nr1,nr2,nr3,ng_env,eps_env_RL,environ_alloc,environ_free
  use cube_m,         ONLY:cube_read_base
  !
-#include<memory.h>
+#include<y_memory.h>
  !
  character(schlen), intent(in) :: filename
  !

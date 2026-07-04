@@ -47,7 +47,8 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
 &                        io_RESPONSE,deliver_IO_error_message
  use QP_m,          ONLY:QP_t,QP_n_G_bands,QP_table,l_QP_symmetrize,&
 &                        QP_env_cohsex,QP_n_states,QP_G_damp,QP_table, QP_env_coh, QP_env_sex
- use X_m,           ONLY:X_ALLOC_elemental,X_mat,X_mat_d,X_t
+ use X_m,           ONLY:X_t,X_par,X_mat,X_mat_d
+ use ALLOC,         ONLY:X_ALLOC_elemental
  use wave_func,     ONLY:WF
  use R_lattice,     ONLY:qindx_S,bz_samp,G_m_G,nqibz,RIM_W_E,bare_qpg,bare_qpg_d,q_pt,&
 &                        RIM_W_is_diagonal,RIM_W_ng,RIM_W,RIM_W_d
@@ -146,13 +147,13 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
  ! if (have_cuda) then
  !    Y AMBO_ALLOC_SOURCE(v_environ%blc_d,v_environ%blc)
  ! endif
+ !
  do iqbz=1,q%nbz 
    if (PAR_IND_Q_ibz%element_1D(q%sstar(iqbz,1))) then
      iq_to_start=iqbz
      exit
    endif
  enddo
- !
  !
  if( .not.l_sc_run ) then
    call PARALLEL_WF_distribute(K_index=PAR_IND_Xk_ibz,B_index=PAR_IND_G_b,CLEAN_UP=.TRUE.)
@@ -172,7 +173,7 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
  ! Elemental Collisions
  !====================== 
  isc%iqref=0
- call elemental_collision_alloc(isc,NG=isc%ngrho,NG_GAMP=(/X%ng,X%ng/),TITLE="GW")
+ call elemental_collision_alloc(isc,NG=isc%ngrho,GAMP_NG=(/X%ng,X%ng/),TITLE="GW")
  call elemental_collision_alloc(iscp,NG=isc%ngrho,TITLE="GW")
  !
  call timing('QP_environ_cohsex',OPR='start')
@@ -190,10 +191,9 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
  ! ALLOCATION
  !------------
  !
-
-
  call io_control(ACTION=OP_RD_CL, COM=REP, SEC=(/1,2/), MODE=VERIFY, ID=ID)
  io_err = io_ENVIRON(X, ID)
+ !
  if (io_RESPONSE) then
    if (io_err < 0) call error('Incomplete and/or broken PCM-screened interaction database')
    call X_ALLOC_elemental('V_ENV',(/X%ng, X%ng, 1/))
@@ -351,7 +351,7 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
        isc%os(1)=ib
        !
        call scatter_Bamp_gpu(isc)
-       if (have_pgu) call devxlib_memcpy_d2h(isc%rhotw, DEV_VAR(isc%rhotw))
+       if (have_gpu) call devxlib_memcpy_d2h(isc%rhotw, DEV_VAR(isc%rhotw))
        iscp%os=isc%os
        !
        if (any(isc%is/=iscp%is)) then

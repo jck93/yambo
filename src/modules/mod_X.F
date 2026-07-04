@@ -196,11 +196,12 @@ module X_m
      real(SP),            optional :: nTrans_percent,Radius
    end subroutine
    !
-   subroutine X_redux_build_kernel(KERNEL,Xo,Xo_rows,Xo_cols,compute_on_gpu,iq)
+   subroutine X_redux_build_kernel(KERNEL,Xo,v_environ,Xo_rows,Xo_cols,compute_on_gpu,iq,X_ng)
      use matrix,        ONLY:PAR_matrix
      implicit none
      type(PAR_matrix), target :: KERNEL,Xo
-     integer, intent(in)      :: Xo_rows(2),Xo_cols(2),iq
+     type(PAR_matrix)         :: v_environ
+     integer, intent(in)      :: Xo_rows(2),Xo_cols(2),iq,X_ng
      logical, intent(in)      :: compute_on_gpu
    end subroutine
    ! 

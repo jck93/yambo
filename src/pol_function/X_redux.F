@@ -250,7 +250,7 @@ subroutine X_redux(iq,what,X_par,v_env_par,Xw,X)
    !
    ! no Fxc [delta_(g1,g2)-Xo(g1,g2)*v(g2)]
    !
-   call X_redux_build_kernel(KERNEL,Xo,Xo_rows,Xo_cols,v_environ,compute_on_gpu,iq)
+   call X_redux_build_kernel(KERNEL,v_environ,Xo,Xo_rows,Xo_cols,compute_on_gpu,iq,X%ng)
    !
    ! X(g,gp)=Sum_gpp[KERNEL]^-1_(g,gpp)*Xo(gpp,gp)
    !
@@ -449,14 +449,21 @@ subroutine X_redux(iq,what,X_par,v_env_par,Xw,X)
  !
 end subroutine
    !
-  subroutine X_redux_build_kernel(KERNEL,Xo,Xo_rows,Xo_cols,v_environ,compute_on_gpu,iq)
-     use R_lattice,     ONLY:bare_qpg, DEV_VAR(bare_qpg)
-     use pars,          ONLY:pi,cONE,SP
-     use matrix,        ONLY:PAR_matrix
-     implicit none
+  subroutine X_redux_build_kernel(KERNEL,Xo,v_environ,Xo_rows,Xo_cols,compute_on_gpu,iq,X_ng)
+     !
+     use pars,          ONLY: cZERO
+     use R_lattice,     ONLY: bare_qpg, DEV_VAR(bare_qpg)
+     use pars,          ONLY: pi,cONE,SP
+     use matrix,        ONLY: PAR_matrix,MATRIX_reset
+     use environ_m,     ONLY: l_environ
+     use interfaces,    ONLY: LINEAR_ALGEBRA_driver
+     use linear_algebra,ONLY: MAT_MUL
+     !
+#include<y_memory.h>
+     !
      type(PAR_matrix), target :: KERNEL,Xo
-     integer, intent(in)      :: Xo_rows(2),Xo_cols(2),iq
      type(PAR_matrix)         :: v_environ
+     integer, intent(in)      :: Xo_rows(2),Xo_cols(2),iq,X_ng
      logical, intent(in)      :: compute_on_gpu
      !
      integer :: ig1,ig2
@@ -467,7 +474,7 @@ end subroutine
      type(PAR_matrix), target      :: work
      !
      if (l_environ) then
-       call MATRIX_init( "SLK", work, X%ng, 1 )
+       call MATRIX_init( "SLK", work, X_ng, 1 )
        YAMBO_ALLOC(work%blc,(work%BLCrows(1):work%BLCrows(2),work%BLCcols(1):work%BLCcols(2),1))
        work%blc=cZERO
        if (compute_on_gpu) then

@@ -41,7 +41,7 @@ subroutine OPTICS_driver(Xen,Xk,q,wv,X,Dip)
  ! 
  ! Work Space
  !
- integer          :: iq
+ integer          :: iq,ID,i_err
  complex(SP)      :: fac,spectra(wv%n_freqs,2)
  logical          :: l_skip_non_int_eps,Macroscopic_CPU
  !

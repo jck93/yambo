@@ -250,7 +250,7 @@ subroutine X_redux(iq,what,X_par,v_env_par,Xw,X)
    !
    ! no Fxc [delta_(g1,g2)-Xo(g1,g2)*v(g2)]
    !
-   call X_redux_build_kernel(KERNEL,v_environ,Xo,Xo_rows,Xo_cols,compute_on_gpu,iq,X%ng)
+   call X_redux_build_kernel(KERNEL,Xo,v_environ,Xo_rows,Xo_cols,compute_on_gpu,iq,X%ng)
    !
    ! X(g,gp)=Sum_gpp[KERNEL]^-1_(g,gpp)*Xo(gpp,gp)
    !

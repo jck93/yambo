@@ -58,6 +58,8 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
  use matrix_operate,ONLY:mat_transpose
  use matrix,        ONLY:PAR_matrix,MATRIX_reset
  use timing_m,      ONLY:timing
+ use wavefunction_mask_m, &
+                    ONLY:initialize_WF_mask,finalize_WF_mask
 #if defined _SC
  use parallel_m,    ONLY:PAR_COM_QP_A2A
  use SC,            ONLY:it_now,it_to_start
@@ -205,6 +207,8 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
  !
  !
  call PP_wait()
+
+ call initialize_WF_mask()
  !
  timing_steps=PAR_IND_QP%n_of_elements(PAR_IND_QP_ID+1)*&
 &             PAR_IND_Q_ibz%n_of_elements(PAR_IND_Q_ibz_ID+1)*&
@@ -407,6 +411,8 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
  ! ALL 2 ALL of QP_env_cohsex
  call PP_redux_wait(QP_env_cohsex)
  call PP_redux_wait(QP_env_sex)
+ !
+ call finalize_WF_mask()
  !
  call timing('QP_environ_cohsex',OPR='stop')
  !

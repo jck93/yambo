@@ -307,7 +307,8 @@ subroutine QP_environ_cohsex(X,Xk,E,k,q,qp)
      isc%os=(/QP_table(i_qp,2),QP_table(i_qp,3),1,spin(QP_table(i_qp,:))/)
      isc%qs=(/1,1,1/)
 
-     call scatter_Bamp_gpu(isc)
+     call scatter_Bamp_wavefunction_mask_gpu(isc)
+     ! call scatter_Bamp_gpu(isc)
      if (have_gpu) call devxlib_memcpy_d2h(isc%rhotw,DEV_VAR(isc%rhotw))
      !
      dp_dummy = 0.0_DP

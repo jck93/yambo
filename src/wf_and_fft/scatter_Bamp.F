@@ -5,7 +5,7 @@
 !
 ! Authors (see AUTHORS file for details): AM DS AF
 !
-subroutine DEV_SUB(scatter_Bamp)(isc)
+subroutine DEV_SUB(WF_SUB(scatter_Bamp))(isc)
  !
  ! rhotw(G)=<ib ik_is i_sp| e^[I(RsG-G0).r] | ob ok_os o_sp>
  !
@@ -30,6 +30,9 @@ subroutine DEV_SUB(scatter_Bamp)(isc)
  !&                        fft_size,fft_dim,DEV_VAR(fft_g_table)
  use interfaces,     ONLY:DEV_SUB(WF_apply_symm)
  use devxlib,        ONLY:devxlib_memset_d,devxlib_memset_h
+#if defined WF_MASK
+ use wavefunction_mask_m, ONLY:apply_WF_mask
+#endif
  !
  implicit none
  !
@@ -55,6 +58,13 @@ subroutine DEV_SUB(scatter_Bamp)(isc)
  !
  ! | ob ok_os o_sp>
  call DEV_SUB(WF_apply_symm)(isc%os,WF_symm_o_p)
+ !
+ !
+#if defined WF_MASK
+ call apply_WF_mask(WF_symm_i_p)
+ call apply_WF_mask(WF_symm_o_p)
+#endif
+ !
  !
  ! \tilde{\rho} in Real Space
  !
@@ -227,4 +237,4 @@ subroutine DEV_SUB(scatter_Bamp)(isc)
  if (isc%qs(2)==1.and.isc%is(1)/=isc%os(1)) call devxlib_memset_h(rhotw_p, cZERO, range1=[1,1])
 #endif
  !
-end subroutine DEV_SUB(scatter_Bamp)
+end subroutine DEV_SUB(WF_SUB(scatter_Bamp))

@@ -141,7 +141,7 @@ subroutine apply_WF_mask(wavefunction)
   !
   ! First apply WF_mask to wavefunction and calculate its reduced norm...
   !
-  !DEV_ACC_DEBUG data present(wavefunction, WF_mask)
+  !DEV_ACC_DEBUG data present(wavefunction, WF_mask_p)
   !DEV_ACC parallel loop reduction(+:squared_norm)
   !DEV_CUF kernel do(1) <<<*,*>>>
   !DEV_OMPGPU target map(tofrom: squared_norm) map(present, alloc: wavefunction, WF_mask_p)

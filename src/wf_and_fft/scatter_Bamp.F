@@ -31,7 +31,7 @@ subroutine DEV_SUB(WF_SUB(scatter_Bamp))(isc)
  use interfaces,     ONLY:DEV_SUB(WF_apply_symm)
  use devxlib,        ONLY:devxlib_memset_d,devxlib_memset_h
 #if defined WF_MASK
- use wavefunction_mask_m, ONLY:apply_WF_mask
+ use wavefunction_mask_m, ONLY:DEV_SUB(apply_WF_mask)
 #endif
  !
  implicit none
@@ -61,8 +61,8 @@ subroutine DEV_SUB(WF_SUB(scatter_Bamp))(isc)
  !
  !
 #if defined WF_MASK
- call apply_WF_mask(WF_symm_i_p)
- call apply_WF_mask(WF_symm_o_p)
+ call DEV_SUB(apply_WF_mask)(WF_symm_i_p)
+ call DEV_SUB(apply_WF_mask)(WF_symm_o_p)
 #endif
  !
  !

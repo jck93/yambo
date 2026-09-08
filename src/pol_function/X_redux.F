@@ -281,6 +281,7 @@ subroutine X_redux(iq,what,X_par,v_env_par,Xw,X)
      Xo%blc(:,:,1)=BUFFER%blc(:,:,BUFFER%I)
      !
    endif
+   if (compute_on_gpu) call devxlib_memcpy_d2h(Xo%blc,DEV_VAR(Xo%blc))
    !
    ! When calculating EPS1 multiply X left and right by v_coul^1/2 (diagonal in reciprocal space)
    !
@@ -294,6 +295,7 @@ subroutine X_redux(iq,what,X_par,v_env_par,Xw,X)
          !
          call LINEAR_ALGEBRA_driver(MAT_MUL,M_slk=Xo,B_slk=v_environ,C_slk=work)
          call LINEAR_ALGEBRA_driver(MAT_MUL,M_slk=v_environ,B_slk=work,C_slk=Xo)
+         if (compute_on_gpu) call devxlib_memcpy_h2d(DEV_VAR(Xo%blc),Xo%blc)
          !
          !DEV_ACC_DEBUG data present(Xo_p,bare_qpg)
          !DEV_ACC parallel loop collapse(2)
@@ -458,6 +460,7 @@ end subroutine
      use environ_m,     ONLY: l_environ
      use interfaces,    ONLY: LINEAR_ALGEBRA_driver
      use linear_algebra,ONLY: MAT_MUL
+     use devxlib,       ONLY: devxlib_memcpy_h2d
      !
 #include<y_memory.h>
      !
@@ -492,6 +495,7 @@ end subroutine
          !
          ! work = Xo * v_environ
          call LINEAR_ALGEBRA_driver(MAT_MUL,M_slk=Xo,B_slk=v_environ,C_slk=work)
+         if (compute_on_gpu) call devxlib_memcpy_h2d(DEV_VAR(work%blc), work%blc)
          !
          !DEV_ACC_DEBUG data present(KERNEL_p,work_p)
          !DEV_ACC parallel loop collapse(2)

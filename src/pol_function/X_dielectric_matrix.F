@@ -399,7 +399,7 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE,CHILD)
    !
    ! allocation of X_mat
    if (io_RESPONSE.and..not.allocated(X_mat)) then
-#if ! defined _PAR_IO
+#if !defined _PAR_IO
      call X_ALLOC_elemental('X',(/X%ng,X%ng,Xw%n_freqs/))
 #endif
    endif
@@ -420,7 +420,7 @@ integer function X_dielectric_matrix(Xen,Xk,q,X,Xw,Dip,SILENT_MODE,CHILD)
    ! X_mat (and other few quantities) deallocate
    !
    if (io_RESPONSE.and.allocated(X_mat)) then
-#if ! defined _PAR_IO
+#if !defined _PAR_IO
      call X_ALLOC_elemental('X')
 #endif
    endif
